@@ -3,8 +3,10 @@ import * as path from 'path';
 import {
   ApiKeyConfig,
   AppConfig,
+  LogLevel,
   ModelConfig,
   ModelRole,
+  ObservabilityConfig,
   ProviderConfig,
   RouteConfig,
 } from './config.interfaces';
@@ -12,6 +14,54 @@ import {
 const DEFAULT_CONFIG_RELATIVE_PATH = './config/open-fusion.config.json';
 
 const MODEL_ROLES: ModelRole[] = ['orchestrator', 'delegate'];
+
+/**
+ * Provider `type` values the gateway can actually construct an adapter for.
+ * OpenRouter is the only officially supported provider in the MVP (ADR 0006 /
+ * spec 004); this enum is what makes "every provider needs a KNOWN type" a
+ * boot-time contract. Adding a provider means registering its type here and in
+ * the providers module (see openfusion-provider-adapter).
+ */
+const KNOWN_PROVIDER_TYPES = ['openrouter'];
+
+/**
+ * Closed vocabulary of model capabilities (spec 004's list, plus the
+ * routing-specific plan/code/review/design set used by spec 006). Capabilities
+ * are advisory metadata for orchestration; declaring one the provider can't
+ * actually back up is a config author's mistake, but an *unknown* capability
+ * string is a schema error we reject at boot.
+ */
+const KNOWN_CAPABILITIES = [
+  'general',
+  'reasoning',
+  'coding',
+  'long_context',
+  'vision',
+  'tool_calling',
+  'json_mode',
+  'fast_draft',
+  'low_cost',
+  'plan',
+  'code',
+  'review',
+  'design',
+];
+
+const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error'];
+
+const DEFAULT_REDACT = ['apiKey', 'token', 'authorization'];
+
+/**
+ * Permissive local-dev mode (spec 003: "salvo em modo de validacao permissivo
+ * local"). When set, a provider secret whose env var is missing does not fail
+ * boot — the provider is loaded with no `apiKey`, so the config can be
+ * validated locally without every real credential present. It NEVER relaxes
+ * client auth tokens (`tokenEnv`), which are required to serve any request.
+ */
+function isPermissiveSecretsMode(): boolean {
+  const flag = process.env.OPEN_FUSION_ALLOW_MISSING_SECRETS;
+  return flag === '1' || flag === 'true';
+}
 
 /**
  * Thrown for any problem found while loading/validating the Open Fusion
@@ -187,12 +237,22 @@ function validateProviders(raw: Record<string, unknown>): ProviderConfig[] {
         'must be a non-empty string',
       );
     }
+    if (!KNOWN_PROVIDER_TYPES.includes(value.type)) {
+      throw new ConfigLoadError(
+        `${fieldPrefix}.type`,
+        `must be one of ${KNOWN_PROVIDER_TYPES.map((t) => `'${t}'`).join(', ')}, got ${JSON.stringify(value.type)}`,
+      );
+    }
     if (!isNonEmptyString(value.apiKeyEnv)) {
       throw new ConfigLoadError(
         `${fieldPrefix}.apiKeyEnv`,
         'must be a non-empty string naming an environment variable',
       );
     }
+    const apiKey = resolveProviderSecret(
+      value.apiKeyEnv,
+      `${fieldPrefix}.apiKeyEnv`,
+    );
     if (value.baseUrl !== undefined && !isNonEmptyString(value.baseUrl)) {
       throw new ConfigLoadError(
         `${fieldPrefix}.baseUrl`,
@@ -218,7 +278,7 @@ function validateProviders(raw: Record<string, unknown>): ProviderConfig[] {
     return {
       name,
       type: value.type,
-      apiKeyEnv: value.apiKeyEnv,
+      ...(apiKey !== undefined ? { apiKey } : {}),
       ...(value.baseUrl !== undefined ? { baseUrl: value.baseUrl } : {}),
       ...(value.headers !== undefined
         ? { headers: value.headers as Record<string, string> }
@@ -228,6 +288,29 @@ function validateProviders(raw: Record<string, unknown>): ProviderConfig[] {
         : {}),
     };
   });
+}
+
+/**
+ * Resolves a provider secret referenced by `apiKeyEnv`. Returns the resolved
+ * value, or `undefined` in permissive local-dev mode when the env var is
+ * absent. Outside permissive mode a missing secret fails boot with a message
+ * naming ONLY the env var name — never any already-resolved secret value.
+ */
+function resolveProviderSecret(
+  apiKeyEnv: string,
+  fieldPath: string,
+): string | undefined {
+  const secret = process.env[apiKeyEnv];
+  if (secret && secret.trim().length > 0) {
+    return secret;
+  }
+  if (isPermissiveSecretsMode()) {
+    return undefined;
+  }
+  throw new ConfigLoadError(
+    fieldPath,
+    `environment variable '${apiKeyEnv}' referenced by apiKeyEnv is not set (set OPEN_FUSION_ALLOW_MISSING_SECRETS=1 for permissive local validation)`,
+  );
 }
 
 function validateModels(
@@ -280,6 +363,14 @@ function validateModels(
           'must be an array of strings when set',
         );
       }
+      value.capabilities.forEach((capability, index) => {
+        if (!KNOWN_CAPABILITIES.includes(capability)) {
+          throw new ConfigLoadError(
+            `${fieldPrefix}.capabilities[${index}]`,
+            `unknown capability ${JSON.stringify(capability)}; must be one of ${KNOWN_CAPABILITIES.map((c) => `'${c}'`).join(', ')}`,
+          );
+        }
+      });
       capabilities = value.capabilities;
     }
     if (value.defaults !== undefined && !isPlainObject(value.defaults)) {
@@ -445,6 +536,47 @@ function validateRoutes(
 }
 
 /**
+ * Validates the optional `observability` section (spec 003 structure). Both
+ * fields have safe defaults so the section can be omitted entirely, but a
+ * present value must be valid: `logLevel` from a fixed vocabulary, `redact`
+ * an array of key names to strip before logging.
+ */
+function validateObservability(
+  raw: Record<string, unknown>,
+): ObservabilityConfig {
+  const observability = isPlainObject(raw.observability)
+    ? raw.observability
+    : {};
+
+  let logLevel: LogLevel = 'info';
+  if (observability.logLevel !== undefined) {
+    if (!LOG_LEVELS.includes(observability.logLevel as LogLevel)) {
+      throw new ConfigLoadError(
+        'observability.logLevel',
+        `must be one of ${LOG_LEVELS.map((l) => `'${l}'`).join(', ')}, got ${JSON.stringify(observability.logLevel)}`,
+      );
+    }
+    logLevel = observability.logLevel as LogLevel;
+  }
+
+  let redact = [...DEFAULT_REDACT];
+  if (observability.redact !== undefined) {
+    if (
+      !Array.isArray(observability.redact) ||
+      !observability.redact.every((entry) => typeof entry === 'string')
+    ) {
+      throw new ConfigLoadError(
+        'observability.redact',
+        'must be an array of strings when set',
+      );
+    }
+    redact = observability.redact;
+  }
+
+  return { logLevel, redact };
+}
+
+/**
  * Reads, parses and validates the Open Fusion config file, resolving every
  * `*Env` secret reference against `process.env`. Throws `ConfigLoadError`
  * synchronously on any problem so the caller (ConfigService's constructor)
@@ -465,6 +597,7 @@ export function loadAppConfig(): AppConfig {
   const providers = validateProviders(parsed);
   const models = validateModels(parsed, providers);
   const routes = validateRoutes(parsed, models);
+  const observability = validateObservability(parsed);
 
-  return { serverPort, apiKeys, providers, models, routes };
+  return { serverPort, apiKeys, providers, models, routes, observability };
 }

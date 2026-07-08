@@ -56,5 +56,9 @@
       "maxPayloadBytes": 1048576,
       "streamFinalOnly": true
     }
+  },
+  "observability": {
+    "logLevel": "info",
+    "redact": ["apiKey", "token", "authorization"]
   }
 }

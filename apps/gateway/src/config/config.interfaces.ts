@@ -11,18 +11,29 @@ export interface ApiKeyConfig {
 }
 
 /**
- * A configured LLM provider (e.g. OpenRouter). `apiKeyEnv` holds the *name*
- * of the environment variable carrying the secret, never the secret itself —
- * the resolved value is only ever read at runtime by a provider adapter
- * (spec 004), never serialized (spec 003 "Resolucao de segredos").
+ * A configured LLM provider (e.g. OpenRouter). In the JSON file the secret is
+ * a `apiKeyEnv` *reference* to an environment variable — never a literal. The
+ * loader resolves it at boot into `apiKey`, mirroring how `tokenEnv` becomes
+ * `token`; the resolved value is only read at runtime by a provider adapter
+ * (spec 004) and MUST never be serialized into logs, errors, or responses
+ * (spec 003 "Resolucao de segredos"). `apiKey` is optional only in the
+ * documented permissive local-dev mode (`OPEN_FUSION_ALLOW_MISSING_SECRETS`).
  */
 export interface ProviderConfig {
   name: string;
   type: string;
-  apiKeyEnv: string;
+  apiKey?: string;
   baseUrl?: string;
   headers?: Record<string, string>;
   providerOptions?: Record<string, unknown>;
+}
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export interface ObservabilityConfig {
+  logLevel: LogLevel;
+  /** Key names whose values must be redacted before any structured logging. */
+  redact: string[];
 }
 
 export type ModelRole = 'orchestrator' | 'delegate';
@@ -68,6 +79,7 @@ export interface AppConfig {
   providers: ProviderConfig[];
   models: ModelConfig[];
   routes: RouteConfig[];
+  observability: ObservabilityConfig;
 }
 
 export const CONFIG_SERVICE = Symbol('CONFIG_SERVICE');
@@ -77,5 +89,7 @@ export interface ConfigService {
   findApiKeyByToken(token: string): ApiKeyConfig | undefined;
   findRouteByPublicModel(publicModel: string): RouteConfig | undefined;
   findModelByKey(key: string): ModelConfig | undefined;
+  findProviderByName(name: string): ProviderConfig | undefined;
+  getObservability(): ObservabilityConfig;
   getPublicModels(): PublicModel[];
 }

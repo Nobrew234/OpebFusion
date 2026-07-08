@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "server": { "port": 4001 },
+  "auth": { "apiKeys": [ { "id": "local-dev", "tokenEnv": "OPEN_FUSION_FIXTURE_TOKEN", "allowedRoutes": ["default"] } ] },
+  "providers": { "openrouter": { "type": "openrouter", "apiKeyEnv": "OPENROUTER_API_KEY" } },
+  "models": { "orchestrator.default": { "provider": "openrouter", "model": "openai/gpt-4.1", "role": "orchestrator" } },
+  "routes": { "default": { "publicModel": "open-fusion/default", "orchestrator": "orchestrator.default", "allowedDelegateModels": [], "maxDelegations": -1, "maxDepth": 1 } }
+}

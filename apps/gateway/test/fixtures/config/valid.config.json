@@ -68,5 +68,9 @@
       "maxDelegations": 0,
       "maxDepth": 1
     }
+  },
+  "observability": {
+    "logLevel": "debug",
+    "redact": ["apiKey", "token", "authorization"]
   }
 }
