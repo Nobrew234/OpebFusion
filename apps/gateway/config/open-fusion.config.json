@@ -12,9 +12,49 @@
       }
     ]
   },
+  "providers": {
+    "openrouter": {
+      "type": "openrouter",
+      "apiKeyEnv": "OPENROUTER_API_KEY",
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "headers": {
+        "HTTP-Referer": "https://example.com",
+        "X-Title": "Open Fusion"
+      }
+    }
+  },
+  "models": {
+    "orchestrator.default": {
+      "provider": "openrouter",
+      "model": "openai/gpt-4.1",
+      "role": "orchestrator",
+      "defaults": {
+        "temperature": 0.2
+      }
+    },
+    "worker.fast": {
+      "provider": "openrouter",
+      "model": "openai/gpt-4.1-mini",
+      "role": "delegate",
+      "capabilities": ["general", "fast_draft"],
+      "defaults": {
+        "temperature": 0.3
+      }
+    }
+  },
   "routes": {
     "default": {
-      "publicModel": "open-fusion/default"
+      "publicModel": "open-fusion/default",
+      "orchestrator": "orchestrator.default",
+      "allowedDelegateModels": ["worker.fast"],
+      "maxDelegations": 3,
+      "maxDepth": 1,
+      "timeoutMs": 60000,
+      "delegateTimeoutMs": 30000,
+      "maxMessages": 128,
+      "maxMessageContentLength": 32768,
+      "maxPayloadBytes": 1048576,
+      "streamFinalOnly": true
     }
   }
 }

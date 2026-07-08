@@ -8,9 +8,16 @@ import { ModelsService } from './models.service';
 
 function buildFakeConfigService(publicModels: PublicModel[]): ConfigService {
   return {
-    get: () => ({ serverPort: 3000, apiKeys: [], routes: [] }),
+    get: () => ({
+      serverPort: 3000,
+      apiKeys: [],
+      providers: [],
+      models: [],
+      routes: [],
+    }),
     findApiKeyByToken: () => undefined,
     findRouteByPublicModel: () => undefined,
+    findModelByKey: () => undefined,
     getPublicModels: () => publicModels,
   };
 }

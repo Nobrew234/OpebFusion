@@ -3,6 +3,7 @@ import {
   ApiKeyConfig,
   AppConfig,
   ConfigService as ConfigServiceContract,
+  ModelConfig,
   PublicModel,
   RouteConfig,
 } from './config.interfaces';
@@ -35,6 +36,10 @@ export class ConfigService implements ConfigServiceContract {
     return this.config.routes.find(
       (route) => route.publicModel === publicModel,
     );
+  }
+
+  findModelByKey(key: string): ModelConfig | undefined {
+    return this.config.models.find((model) => model.key === key);
   }
 
   getPublicModels(): PublicModel[] {

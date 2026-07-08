@@ -26,11 +26,20 @@ function buildDto(
   return dto;
 }
 
-const allowedRoute: RouteConfig = { key: 'route-a', publicModel: 'gpt-4o' };
-const forbiddenRoute: RouteConfig = {
-  key: 'route-b',
-  publicModel: 'restricted-model',
-};
+function makeRoute(key: string, publicModel: string): RouteConfig {
+  return {
+    key,
+    publicModel,
+    orchestrator: 'orchestrator.default',
+    allowedDelegateModels: [],
+    maxDelegations: 0,
+    maxDepth: 1,
+    streamFinalOnly: true,
+  };
+}
+
+const allowedRoute: RouteConfig = makeRoute('route-a', 'gpt-4o');
+const forbiddenRoute: RouteConfig = makeRoute('route-b', 'restricted-model');
 
 const apiKey: ApiKeyConfig = {
   id: 'key-1',
@@ -40,11 +49,18 @@ const apiKey: ApiKeyConfig = {
 
 function makeFakeConfigService(routes: RouteConfig[]): ConfigService {
   return {
-    get: () => ({ serverPort: 3000, apiKeys: [apiKey], routes }),
+    get: () => ({
+      serverPort: 3000,
+      apiKeys: [apiKey],
+      providers: [],
+      models: [],
+      routes,
+    }),
     findApiKeyByToken: (token: string) =>
       token === apiKey.token ? apiKey : undefined,
     findRouteByPublicModel: (publicModel: string) =>
       routes.find((r) => r.publicModel === publicModel),
+    findModelByKey: () => undefined,
     getPublicModels: () =>
       routes.map((r) => ({ id: r.publicModel, ownedBy: 'open-fusion' })),
   };

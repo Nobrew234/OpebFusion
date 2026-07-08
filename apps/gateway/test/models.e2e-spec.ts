@@ -23,11 +23,24 @@ function buildFakeConfigService(): ConfigService {
     get: () => ({
       serverPort: 3000,
       apiKeys: [apiKey],
-      routes: [{ key: 'default', publicModel: 'route/default' }],
+      providers: [],
+      models: [],
+      routes: [
+        {
+          key: 'default',
+          publicModel: 'route/default',
+          orchestrator: 'orchestrator.default',
+          allowedDelegateModels: [],
+          maxDelegations: 0,
+          maxDepth: 1,
+          streamFinalOnly: true,
+        },
+      ],
     }),
     findApiKeyByToken: (token: string) =>
       token === VALID_TOKEN ? apiKey : undefined,
     findRouteByPublicModel: () => undefined,
+    findModelByKey: () => undefined,
     getPublicModels: () => publicModels,
   };
 }
