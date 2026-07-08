@@ -1,0 +1,49 @@
+export type ChatRole = 'system' | 'user' | 'assistant' | 'tool';
+
+export interface ChatMessage {
+  role: ChatRole;
+  content: string;
+}
+
+export interface OrchestrationRequest {
+  publicModel: string;
+  messages: ChatMessage[];
+  temperature?: number;
+  topP?: number;
+  maxTokens?: number;
+  stop?: string | string[];
+}
+
+export type FinishReason = 'stop' | 'length';
+
+export interface OrchestrationUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+export interface OrchestrationResult {
+  content: string;
+  finishReason: FinishReason;
+  usage: OrchestrationUsage;
+}
+
+export interface OrchestrationChunk {
+  /** Incremental content for this chunk; empty string on the terminal chunk. */
+  delta: string;
+  /** Non-null only on the terminal chunk. */
+  finishReason: FinishReason | null;
+}
+
+export const ORCHESTRATION_SERVICE = Symbol('ORCHESTRATION_SERVICE');
+
+/**
+ * Seam standing in for spec 002's LLM-orchestrated routing engine, which does
+ * not exist yet. Spec 001 only needs a deterministic target behind this
+ * interface so the HTTP contract (envelope, SSE framing, error mapping) can
+ * be built and tested for real without a live provider call.
+ */
+export interface OrchestrationService {
+  generate(request: OrchestrationRequest): Promise<OrchestrationResult>;
+  stream(request: OrchestrationRequest): AsyncIterable<OrchestrationChunk>;
+}
