@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from './config/config.module';
+import { ErrorsModule } from './common/errors/errors.module';
+import { ModelsModule } from './models/models.module';
+import { ChatCompletionsModule } from './chat-completions/chat-completions.module';
 
-// Feature modules are wired in here as each spec-001 slice lands
-// (ConfigModule, AuthModule, ModelsModule, ErrorsModule, ChatCompletionsModule, OrchestrationModule).
 @Module({
-  imports: [],
+  imports: [ConfigModule, ErrorsModule, ModelsModule, ChatCompletionsModule],
 })
 export class AppModule {}

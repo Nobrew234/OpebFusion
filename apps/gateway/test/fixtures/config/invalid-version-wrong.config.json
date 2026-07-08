@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "server": {
+    "port": 4001
+  },
+  "auth": {
+    "apiKeys": [
+      {
+        "id": "local-dev",
+        "tokenEnv": "OPEN_FUSION_FIXTURE_TOKEN",
+        "allowedRoutes": ["default"]
+      }
+    ]
+  },
+  "routes": {
+    "default": {
+      "publicModel": "open-fusion/default"
+    }
+  }
+}

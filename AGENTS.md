@@ -6,7 +6,7 @@ Instruções-base para qualquer agente de IA (Claude Code, Codex, Cursor, etc.) 
 
 Open Fusion é um gateway de LLMs exposto como API compatível com OpenAI (`/v1/chat/completions`, `/v1/models`). Um modelo orquestrador, configurado por rota, decide responder diretamente ou delegar subtarefas a outros modelos via uma tool interna (`delegate_llm`), segundo políticas declaradas em um único arquivo JSON. Backend em NestJS; chamadas de LLM, streaming e tool calling via Vercel AI SDK; OpenRouter é o primeiro provider oficial.
 
-Estado atual: **greenfield**. Só existem os documentos abaixo — nenhum código, `package.json`, build ou test runner ainda. Antes de escrever a primeira linha de código, confirme com o usuário a estrutura de scaffolding (NestJS CLI, gerenciador de pacotes, config de lint/test) se ela ainda não existir.
+Estado atual: **spec 001 implementada**. O monorepo NestJS existe em `apps/gateway` (npm workspaces). A superfície HTTP compatível com OpenAI está pronta e testada: `POST /v1/chat/completions` (com e sem streaming), `GET /v1/models`, autenticação por bearer token, envelope de erro OpenAI-compatible e carregamento/validação da config JSON no boot. A orquestração real (spec 002+) ainda não existe — há um `FakeOrchestrationService` determinístico atrás do seam `OrchestrationService`, que deve ser substituído sem alterar controllers/DTOs. Rode `npm run build`, `npm test`, `npm run test:e2e` e `npm run lint` a partir da raiz.
 
 ## Leia antes de implementar qualquer coisa
 

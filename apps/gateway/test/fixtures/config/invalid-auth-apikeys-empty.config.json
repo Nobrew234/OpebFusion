@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "server": {
+    "port": 4001
+  },
+  "auth": {
+    "apiKeys": []
+  },
+  "routes": {
+    "default": {
+      "publicModel": "open-fusion/default"
+    }
+  }
+}

@@ -35,16 +35,42 @@ export class GatewayApiException extends HttpException {
     super(body, status);
   }
 
-  static badRequest(message: string, code = 'invalid_request', param: string | null = null): GatewayApiException {
-    return new GatewayApiException(HttpStatus.BAD_REQUEST, 'invalid_request_error', message, code, param);
+  static badRequest(
+    message: string,
+    code = 'invalid_request',
+    param: string | null = null,
+  ): GatewayApiException {
+    return new GatewayApiException(
+      HttpStatus.BAD_REQUEST,
+      'invalid_request_error',
+      message,
+      code,
+      param,
+    );
   }
 
-  static unauthorized(message = 'Missing or invalid API key.', code = 'invalid_api_key'): GatewayApiException {
-    return new GatewayApiException(HttpStatus.UNAUTHORIZED, 'authentication_error', message, code);
+  static unauthorized(
+    message = 'Missing or invalid API key.',
+    code = 'invalid_api_key',
+  ): GatewayApiException {
+    return new GatewayApiException(
+      HttpStatus.UNAUTHORIZED,
+      'authentication_error',
+      message,
+      code,
+    );
   }
 
-  static forbidden(message = 'This API key is not allowed to use this model.', code = 'route_not_allowed'): GatewayApiException {
-    return new GatewayApiException(HttpStatus.FORBIDDEN, 'permission_error', message, code);
+  static forbidden(
+    message = 'This API key is not allowed to use this model.',
+    code = 'route_not_allowed',
+  ): GatewayApiException {
+    return new GatewayApiException(
+      HttpStatus.FORBIDDEN,
+      'permission_error',
+      message,
+      code,
+    );
   }
 
   static modelNotFound(model: string): GatewayApiException {
@@ -57,23 +83,63 @@ export class GatewayApiException extends HttpException {
     );
   }
 
-  static timeout(message = 'The request timed out.', code = 'timeout'): GatewayApiException {
-    return new GatewayApiException(HttpStatus.REQUEST_TIMEOUT, 'timeout_error', message, code);
+  static timeout(
+    message = 'The request timed out.',
+    code = 'timeout',
+  ): GatewayApiException {
+    return new GatewayApiException(
+      HttpStatus.REQUEST_TIMEOUT,
+      'timeout_error',
+      message,
+      code,
+    );
   }
 
-  static rateLimited(message = 'Rate limit exceeded.', code = 'rate_limit_exceeded'): GatewayApiException {
-    return new GatewayApiException(HttpStatus.TOO_MANY_REQUESTS, 'rate_limit_error', message, code);
+  static rateLimited(
+    message = 'Rate limit exceeded.',
+    code = 'rate_limit_exceeded',
+  ): GatewayApiException {
+    return new GatewayApiException(
+      HttpStatus.TOO_MANY_REQUESTS,
+      'rate_limit_error',
+      message,
+      code,
+    );
   }
 
-  static internal(message = 'Internal server error.', code = 'internal_error'): GatewayApiException {
-    return new GatewayApiException(HttpStatus.INTERNAL_SERVER_ERROR, 'api_error', message, code);
+  static internal(
+    message = 'Internal server error.',
+    code = 'internal_error',
+  ): GatewayApiException {
+    return new GatewayApiException(
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      'api_error',
+      message,
+      code,
+    );
   }
 
-  static providerError(message = 'Upstream provider returned an error.', code = 'provider_error'): GatewayApiException {
-    return new GatewayApiException(HttpStatus.BAD_GATEWAY, 'api_error', message, code);
+  static providerError(
+    message = 'Upstream provider returned an error.',
+    code = 'provider_error',
+  ): GatewayApiException {
+    return new GatewayApiException(
+      HttpStatus.BAD_GATEWAY,
+      'api_error',
+      message,
+      code,
+    );
   }
 
-  static providerUnavailable(message = 'Upstream provider is unavailable.', code = 'provider_unavailable'): GatewayApiException {
-    return new GatewayApiException(HttpStatus.SERVICE_UNAVAILABLE, 'api_error', message, code);
+  static providerUnavailable(
+    message = 'Upstream provider is unavailable.',
+    code = 'provider_unavailable',
+  ): GatewayApiException {
+    return new GatewayApiException(
+      HttpStatus.SERVICE_UNAVAILABLE,
+      'api_error',
+      message,
+      code,
+    );
   }
 }
