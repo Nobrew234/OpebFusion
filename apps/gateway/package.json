@@ -23,10 +23,13 @@
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
+    "@openrouter/ai-sdk-provider": "^3.0.0",
+    "ai": "^7.0.18",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -63,6 +66,10 @@
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "moduleNameMapper": {
+      "^ai$": "<rootDir>/../test/mocks/ai-sdk.mock.ts",
+      "^@openrouter/ai-sdk-provider$": "<rootDir>/../test/mocks/ai-sdk.mock.ts"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

@@ -17,6 +17,39 @@ import { ChatCompletionsModule } from '../src/chat-completions/chat-completions.
 import type { ChatCompletionResponse } from '../src/chat-completions/chat-completions.service';
 import { OrchestrationModule } from '../src/orchestration/orchestration.module';
 import type { GatewayErrorBody } from '../src/common/errors/gateway-api.exception';
+import {
+  OPENROUTER_SDK,
+  OpenRouterSdk,
+  SdkGenerateOptions,
+} from '../src/providers/openrouter/openrouter-sdk';
+
+// Fakes the Vercel AI SDK boundary so the e2e drives the REAL adapter +
+// AdapterModelInvoker + orchestration engine end-to-end without any network
+// call (AGENTS.md). It simply echoes the last user message.
+const fakeOpenRouterSdk: OpenRouterSdk = {
+  createModel: () => ({}),
+  generate: (options: SdkGenerateOptions) => {
+    const lastUser = [...options.messages]
+      .reverse()
+      .find((m) => m.role === 'user');
+    const content =
+      typeof lastUser?.content === 'string' ? lastUser.content : '';
+    return Promise.resolve({
+      text: `Echo: ${content}`,
+      toolCalls: [],
+      finishReason: 'stop',
+      usage: { inputTokens: 5, outputTokens: 3, totalTokens: 8 },
+    });
+  },
+  stream: () => ({
+    // eslint-disable-next-line @typescript-eslint/require-await
+    textStream: (async function* () {
+      yield 'Echo: stream';
+    })(),
+    finishReason: Promise.resolve('stop'),
+    usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+  }),
+};
 
 interface ChatCompletionStreamChunk {
   id: string;
@@ -112,7 +145,10 @@ describe('POST /chat/completions (e2e)', () => {
   beforeAll(async () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
       imports: [FakeConfigModule, ChatCompletionsModule, OrchestrationModule],
-    }).compile();
+    })
+      .overrideProvider(OPENROUTER_SDK)
+      .useValue(fakeOpenRouterSdk)
+      .compile();
 
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(
