@@ -201,9 +201,17 @@ export class OrchestrationService implements OrchestrationServiceContract {
         name: call.name,
         arguments: JSON.stringify(call.arguments ?? {}),
       }));
+    let finishReason = this.toFinalFinishReason(result.finishReason);
+    // If the SDK reported tool_calls but every call was an internal delegation
+    // (filtered out above), there is nothing client-visible to call. Never emit
+    // a tool_calls finish_reason with an empty tool_calls array — that would
+    // break the OpenAI contract — so fall back to stop.
+    if (finishReason === 'tool_calls' && finalToolCalls.length === 0) {
+      finishReason = 'stop';
+    }
     return {
       content: result.content,
-      finishReason: this.toFinalFinishReason(result.finishReason),
+      finishReason,
       usage,
       ...(finalToolCalls.length > 0 ? { toolCalls: finalToolCalls } : {}),
     };

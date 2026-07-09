@@ -407,6 +407,30 @@ describe('OrchestrationService (spec 002)', () => {
   });
 
   describe('finish_reason normalization (spec 005 Fase 6)', () => {
+    it('normalizes tool_calls to stop when every final tool call was internal (filtered)', async () => {
+      // maxDelegations 1: after the budget is spent the engine forces a final
+      // orchestrator turn. If that turn (mis)returns a delegate_llm call, it is
+      // filtered out — leaving no client-visible tool call, so finish_reason
+      // must not remain tool_calls with an empty tool_calls array.
+      const invoker = new ScriptedModelInvoker([
+        toolCall([delegateCall('c1', 'worker.fast', 'first')]),
+        finalAnswer('draft'),
+        toolCall([delegateCall('c2', 'worker.fast', 'over limit')]),
+        {
+          content: '',
+          toolCalls: [delegateCall('c3', 'worker.fast', 'stray')],
+          finishReason: 'tool_calls',
+          usage: USAGE,
+        },
+      ]);
+      const service = makeService(makeRoute({ maxDelegations: 1 }), invoker);
+
+      const result = await service.generate(baseRequest());
+
+      expect(result.finishReason).toBe('stop');
+      expect(result.toolCalls).toBeUndefined();
+    });
+
     it('preserves a content_filter finish reason from the final model result', async () => {
       const invoker = new ScriptedModelInvoker([
         {
