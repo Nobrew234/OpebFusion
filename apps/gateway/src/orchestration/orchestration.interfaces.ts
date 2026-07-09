@@ -14,7 +14,15 @@ export interface OrchestrationRequest {
   stop?: string | string[];
 }
 
-export type FinishReason = 'stop' | 'length';
+/**
+ * Public finish reasons exposed in the Chat Completions envelope (spec 005
+ * "Finish reasons"): `stop` (natural end), `length` (token cap hit),
+ * `tool_calls` (the final answer requests client-visible tools), and
+ * `content_filter` (the provider signalled a block). `error` stays internal —
+ * it is converted to an HTTP error before reaching the client, never a
+ * finish_reason value.
+ */
+export type FinishReason = 'stop' | 'length' | 'tool_calls' | 'content_filter';
 
 export interface OrchestrationUsage {
   promptTokens: number;

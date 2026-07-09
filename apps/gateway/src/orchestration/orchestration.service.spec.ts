@@ -332,6 +332,53 @@ describe('OrchestrationService (spec 002)', () => {
     });
   });
 
+  describe('finish_reason normalization (spec 005 Fase 6)', () => {
+    it('preserves a content_filter finish reason from the final model result', async () => {
+      const invoker = new ScriptedModelInvoker([
+        {
+          content: '',
+          toolCalls: [],
+          finishReason: 'content_filter',
+          usage: USAGE,
+        },
+      ]);
+      const service = makeService(makeRoute(), invoker);
+
+      const result = await service.generate(baseRequest());
+
+      expect(result.finishReason).toBe('content_filter');
+    });
+
+    it('preserves a length finish reason from the final model result', async () => {
+      const invoker = new ScriptedModelInvoker([
+        { content: 'truncated', toolCalls: [], finishReason: 'length', usage: USAGE },
+      ]);
+      const service = makeService(makeRoute(), invoker);
+
+      const result = await service.generate(baseRequest());
+
+      expect(result.finishReason).toBe('length');
+    });
+
+    it('surfaces tool_calls when the final result requests a non-delegate (external) tool', async () => {
+      const invoker = new ScriptedModelInvoker([
+        {
+          content: '',
+          toolCalls: [
+            { id: 't1', name: 'get_weather', arguments: { city: 'Rio' } },
+          ],
+          finishReason: 'tool_calls',
+          usage: USAGE,
+        },
+      ]);
+      const service = makeService(makeRoute(), invoker);
+
+      const result = await service.generate(baseRequest());
+
+      expect(result.finishReason).toBe('tool_calls');
+    });
+  });
+
   describe('streaming (streamFinalOnly)', () => {
     it('streams only the final answer, never delegated content', async () => {
       const invoker = new ScriptedModelInvoker([

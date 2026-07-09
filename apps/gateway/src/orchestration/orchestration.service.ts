@@ -8,6 +8,7 @@ import type {
 import { GatewayApiException } from '../common/errors/gateway-api.exception';
 import { MODEL_INVOKER } from '../providers/model-invoker.interfaces';
 import type {
+  InvocationFinishReason,
   InvocationMessage,
   InvocationUsage,
   ModelInvoker,
@@ -292,12 +293,12 @@ export class OrchestrationService implements OrchestrationServiceContract {
     return JSON.stringify({ error: code, message });
   }
 
-  private toFinalFinishReason(
-    reason: 'stop' | 'length' | 'tool_calls' | 'content_filter',
-  ): FinishReason {
-    // The public envelope for spec 002 only distinguishes stop/length; richer
-    // finish_reason mapping (tool_calls, content_filter) is spec 005's remit.
-    return reason === 'length' ? 'length' : 'stop';
+  private toFinalFinishReason(reason: InvocationFinishReason): FinishReason {
+    // Spec 005 "Finish reasons": the SDK's finish reason maps 1:1 onto the
+    // public envelope value. `stop`/`length`/`tool_calls`/`content_filter` all
+    // pass through; the SDK never surfaces `error` here (a hard failure throws
+    // and is converted to an HTTP error upstream instead).
+    return reason;
   }
 
   private zeroUsage(): OrchestrationUsage {
