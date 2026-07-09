@@ -65,6 +65,7 @@ describe('ConfigService', () => {
           maxMessageContentLength: 32768,
           maxPayloadBytes: 1048576,
           streamFinalOnly: true,
+          allowExternalTools: false,
         },
         {
           key: 'secondary',
@@ -74,6 +75,7 @@ describe('ConfigService', () => {
           maxDelegations: 0,
           maxDepth: 1,
           streamFinalOnly: true,
+          allowExternalTools: false,
         },
       ]);
     });
@@ -151,6 +153,7 @@ describe('ConfigService', () => {
         maxDelegations: 0,
         maxDepth: 1,
         streamFinalOnly: true,
+        allowExternalTools: false,
       });
     });
 

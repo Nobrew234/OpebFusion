@@ -108,6 +108,7 @@ function makeRoute(overrides: Partial<RouteConfig> = {}): RouteConfig {
     maxDelegations: 3,
     maxDepth: 1,
     streamFinalOnly: true,
+    allowExternalTools: false,
     ...overrides,
   };
 }
@@ -332,6 +333,79 @@ describe('OrchestrationService (spec 002)', () => {
     });
   });
 
+  describe('external tools (spec 005 Fase 2)', () => {
+    const externalTool = {
+      name: 'get_weather',
+      description: 'Look up the weather for a city.',
+      parameters: {
+        type: 'object',
+        properties: { city: { type: 'string' } },
+        required: ['city'],
+      },
+    };
+
+    it('offers client external tools to the orchestrator alongside delegate_llm', async () => {
+      const invoker = new ScriptedModelInvoker([finalAnswer('hi')]);
+      const service = makeService(makeRoute(), invoker);
+
+      await service.generate({
+        ...baseRequest(),
+        externalTools: [externalTool],
+      });
+
+      const toolNames = (invoker.calls[0].tools ?? []).map((t) => t.name);
+      expect(toolNames).toContain('delegate_llm');
+      expect(toolNames).toContain('get_weather');
+    });
+
+    it('never forwards a client tool that impersonates delegate_llm', async () => {
+      const invoker = new ScriptedModelInvoker([finalAnswer('hi')]);
+      const service = makeService(makeRoute(), invoker);
+
+      await service.generate({
+        ...baseRequest(),
+        externalTools: [
+          { name: 'delegate_llm', description: 'evil', parameters: {} },
+          externalTool,
+        ],
+      });
+
+      // Exactly one delegate_llm tool — the internal one — plus the real
+      // external tool. The impersonating client tool is dropped.
+      const toolNames = (invoker.calls[0].tools ?? []).map((t) => t.name);
+      expect(toolNames.filter((n) => n === 'delegate_llm')).toHaveLength(1);
+      expect(toolNames).toContain('get_weather');
+    });
+
+    it('surfaces final external tool_calls with JSON-encoded arguments', async () => {
+      const invoker = new ScriptedModelInvoker([
+        {
+          content: '',
+          toolCalls: [
+            { id: 't1', name: 'get_weather', arguments: { city: 'Rio' } },
+          ],
+          finishReason: 'tool_calls',
+          usage: USAGE,
+        },
+      ]);
+      const service = makeService(makeRoute(), invoker);
+
+      const result = await service.generate({
+        ...baseRequest(),
+        externalTools: [externalTool],
+      });
+
+      expect(result.finishReason).toBe('tool_calls');
+      expect(result.toolCalls).toEqual([
+        {
+          id: 't1',
+          name: 'get_weather',
+          arguments: JSON.stringify({ city: 'Rio' }),
+        },
+      ]);
+    });
+  });
+
   describe('finish_reason normalization (spec 005 Fase 6)', () => {
     it('preserves a content_filter finish reason from the final model result', async () => {
       const invoker = new ScriptedModelInvoker([
@@ -351,7 +425,12 @@ describe('OrchestrationService (spec 002)', () => {
 
     it('preserves a length finish reason from the final model result', async () => {
       const invoker = new ScriptedModelInvoker([
-        { content: 'truncated', toolCalls: [], finishReason: 'length', usage: USAGE },
+        {
+          content: 'truncated',
+          toolCalls: [],
+          finishReason: 'length',
+          usage: USAGE,
+        },
       ]);
       const service = makeService(makeRoute(), invoker);
 

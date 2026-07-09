@@ -1,3 +1,5 @@
+import type { ToolSpec } from '../providers/model-invoker.interfaces';
+
 export type ChatRole = 'system' | 'user' | 'assistant' | 'tool';
 
 export interface ChatMessage {
@@ -12,6 +14,26 @@ export interface OrchestrationRequest {
   topP?: number;
   maxTokens?: number;
   stop?: string | string[];
+  /**
+   * Client-supplied external tools, already normalized to internal ToolSpec.
+   * Present ONLY when the active route sets `allowExternalTools` (spec 005
+   * "Tool calling"); otherwise the HTTP layer drops them so they never reach a
+   * provider. `delegate_llm` is never among these — it is injected internally
+   * and is invisible to the client.
+   */
+  externalTools?: ToolSpec[];
+}
+
+/**
+ * A client-visible tool call surfaced in the final answer (spec 005 Fase 5/6:
+ * "tool calls finais permitidas"). `arguments` is JSON-encoded to match the
+ * OpenAI `tool_calls[].function.arguments` string field. Internal
+ * `delegate_llm` calls are NEVER represented here.
+ */
+export interface FinalToolCall {
+  id: string;
+  name: string;
+  arguments: string;
 }
 
 /**
@@ -34,6 +56,12 @@ export interface OrchestrationResult {
   content: string;
   finishReason: FinishReason;
   usage: OrchestrationUsage;
+  /**
+   * Present only when the final answer requests client-visible (external)
+   * tools; `finishReason` is then `tool_calls`. Internal delegations never
+   * appear here.
+   */
+  toolCalls?: FinalToolCall[];
 }
 
 export interface OrchestrationChunk {

@@ -11,8 +11,10 @@ import type {
   InvocationFinishReason,
   InvocationMessage,
   InvocationUsage,
+  ModelInvocationResult,
   ModelInvoker,
   ModelToolCall,
+  ToolSpec,
 } from '../providers/model-invoker.interfaces';
 import {
   DELEGATE_LLM_TOOL_NAME,
@@ -22,6 +24,7 @@ import {
 } from './delegate-llm.tool';
 import {
   ChatMessage,
+  FinalToolCall,
   FinishReason,
   OrchestrationChunk,
   OrchestrationRequest,
@@ -105,9 +108,17 @@ export class OrchestrationService implements OrchestrationServiceContract {
       },
       ...request.messages.map(this.toInvocationMessage),
     ];
-    const tools = canDelegate
-      ? [delegateLlmToolSpec(route.allowedDelegateModels)]
-      : [];
+    // Tools offered to the orchestrator: the internal delegate_llm (when the
+    // route can delegate) plus any client external tools the route allows.
+    // externalTools arrive already gated by the HTTP layer; we still strip any
+    // that impersonate the internal tool name as a defense in depth.
+    const externalTools = this.sanitizeExternalTools(request.externalTools);
+    const tools: ToolSpec[] = [
+      ...(canDelegate
+        ? [delegateLlmToolSpec(route.allowedDelegateModels)]
+        : []),
+      ...externalTools,
+    ];
 
     let usage = this.zeroUsage();
     const state = { delegations: 0 };
@@ -133,11 +144,7 @@ export class OrchestrationService implements OrchestrationServiceContract {
         (call) => call.name === DELEGATE_LLM_TOOL_NAME,
       );
       if (delegateCalls.length === 0) {
-        return {
-          content: result.content,
-          finishReason: this.toFinalFinishReason(result.finishReason),
-          usage,
-        };
+        return this.buildFinalResult(result, usage);
       }
 
       messages.push({
@@ -161,11 +168,12 @@ export class OrchestrationService implements OrchestrationServiceContract {
     }
 
     // Steps exhausted without a direct answer: force one final orchestrator
-    // turn with no tools so it must produce the final response.
+    // turn offering no internal delegation (external tools stay available so
+    // an allowed client tool can still be requested in the final answer).
     const finalResult = await this.modelInvoker.invoke({
       modelKey: route.orchestrator,
       messages,
-      tools: [],
+      tools: externalTools,
       temperature: request.temperature,
       topP: request.topP,
       maxTokens: request.maxTokens,
@@ -173,11 +181,44 @@ export class OrchestrationService implements OrchestrationServiceContract {
       timeoutMs: route.timeoutMs,
     });
     usage = this.addUsage(usage, finalResult.usage);
+    return this.buildFinalResult(finalResult, usage);
+  }
+
+  /**
+   * Builds the public OrchestrationResult from a final model result. Any
+   * client-visible (non-delegate) tool calls the model requested are surfaced
+   * as `toolCalls` with JSON-encoded arguments (spec 005 Fase 5/6); internal
+   * `delegate_llm` calls are never included.
+   */
+  private buildFinalResult(
+    result: ModelInvocationResult,
+    usage: OrchestrationUsage,
+  ): OrchestrationResult {
+    const finalToolCalls: FinalToolCall[] = result.toolCalls
+      .filter((call) => call.name !== DELEGATE_LLM_TOOL_NAME)
+      .map((call) => ({
+        id: call.id,
+        name: call.name,
+        arguments: JSON.stringify(call.arguments ?? {}),
+      }));
     return {
-      content: finalResult.content,
-      finishReason: this.toFinalFinishReason(finalResult.finishReason),
+      content: result.content,
+      finishReason: this.toFinalFinishReason(result.finishReason),
       usage,
+      ...(finalToolCalls.length > 0 ? { toolCalls: finalToolCalls } : {}),
     };
+  }
+
+  /**
+   * Drops any external tool that reuses the internal `delegate_llm` name so a
+   * client can never smuggle or shadow the internal delegation tool
+   * (AGENTS.md: `delegate_llm` is internal and never client-choosable).
+   */
+  private sanitizeExternalTools(tools: ToolSpec[] | undefined): ToolSpec[] {
+    if (!tools || tools.length === 0) {
+      return [];
+    }
+    return tools.filter((tool) => tool.name !== DELEGATE_LLM_TOOL_NAME);
   }
 
   /**

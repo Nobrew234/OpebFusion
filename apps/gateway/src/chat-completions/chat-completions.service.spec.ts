@@ -39,6 +39,7 @@ function makeRoute(
     maxDelegations: 0,
     maxDepth: 1,
     streamFinalOnly: true,
+    allowExternalTools: false,
     ...overrides,
   };
 }
@@ -284,6 +285,131 @@ describe('ChatCompletionsService', () => {
       expect(() => service.prepareStream(dto, apiKey)).toThrow(
         GatewayApiException,
       );
+    });
+  });
+
+  describe('external tools gating (spec 005 Fase 2)', () => {
+    function makeCapturingService(route: RouteConfig): {
+      service: ChatCompletionsService;
+      captured: OrchestrationRequest[];
+      setToolCalls: (calls: OrchestrationResult['toolCalls']) => void;
+    } {
+      const captured: OrchestrationRequest[] = [];
+      let finalToolCalls: OrchestrationResult['toolCalls'];
+      const orchestration: OrchestrationService = {
+        generate: (request) => {
+          captured.push(request);
+          return Promise.resolve({
+            content: finalToolCalls ? '' : 'ok',
+            finishReason: finalToolCalls ? 'tool_calls' : 'stop',
+            usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+            ...(finalToolCalls ? { toolCalls: finalToolCalls } : {}),
+          });
+        },
+        stream: async function* () {
+          await Promise.resolve();
+          yield { delta: '', finishReason: 'stop' as const };
+        },
+      };
+      const keyForRoute: ApiKeyConfig = {
+        id: 'key-1',
+        token: 'secret-token',
+        allowedRoutes: [route.key],
+      };
+      const config = makeFakeConfigService([route]);
+      config.findApiKeyByToken = (token: string) =>
+        token === keyForRoute.token ? keyForRoute : undefined;
+      return {
+        service: new ChatCompletionsService(config, orchestration),
+        captured,
+        setToolCalls: (calls) => {
+          finalToolCalls = calls;
+        },
+      };
+    }
+
+    const clientTools = [
+      {
+        type: 'function',
+        function: {
+          name: 'get_weather',
+          description: 'weather',
+          parameters: { type: 'object' },
+        },
+      },
+    ];
+
+    it('forwards external tools when the route allows them', async () => {
+      const route = makeRoute('route-a', 'gpt-4o', {
+        allowExternalTools: true,
+      });
+      const { service, captured } = makeCapturingService(route);
+      const dto = buildDto({ tools: clientTools });
+
+      await service.createCompletion(dto, apiKey);
+
+      expect(captured[0].externalTools).toEqual([
+        {
+          name: 'get_weather',
+          description: 'weather',
+          parameters: { type: 'object' },
+        },
+      ]);
+    });
+
+    it('drops external tools when the route does not allow them', async () => {
+      const route = makeRoute('route-a', 'gpt-4o', {
+        allowExternalTools: false,
+      });
+      const { service, captured } = makeCapturingService(route);
+      const dto = buildDto({ tools: clientTools });
+
+      await service.createCompletion(dto, apiKey);
+
+      expect(captured[0].externalTools).toBeUndefined();
+    });
+
+    it('never forwards a client tool impersonating delegate_llm', async () => {
+      const route = makeRoute('route-a', 'gpt-4o', {
+        allowExternalTools: true,
+      });
+      const { service, captured } = makeCapturingService(route);
+      const dto = buildDto({
+        tools: [
+          {
+            type: 'function',
+            function: { name: 'delegate_llm', parameters: {} },
+          },
+          ...clientTools,
+        ],
+      });
+
+      await service.createCompletion(dto, apiKey);
+
+      const names = (captured[0].externalTools ?? []).map((t) => t.name);
+      expect(names).toEqual(['get_weather']);
+    });
+
+    it('renders final tool_calls into the envelope with finish_reason tool_calls', async () => {
+      const route = makeRoute('route-a', 'gpt-4o', {
+        allowExternalTools: true,
+      });
+      const { service, setToolCalls } = makeCapturingService(route);
+      setToolCalls([
+        { id: 't1', name: 'get_weather', arguments: '{"city":"Rio"}' },
+      ]);
+      const dto = buildDto({ tools: clientTools });
+
+      const envelope = await service.createCompletion(dto, apiKey);
+
+      expect(envelope.choices[0].finish_reason).toBe('tool_calls');
+      expect(envelope.choices[0].message.tool_calls).toEqual([
+        {
+          id: 't1',
+          type: 'function',
+          function: { name: 'get_weather', arguments: '{"city":"Rio"}' },
+        },
+      ]);
     });
   });
 });
