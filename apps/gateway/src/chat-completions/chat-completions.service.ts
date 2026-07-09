@@ -54,7 +54,8 @@ export class ChatCompletionsService {
     dto: ChatCompletionRequestDto,
     apiKey: ApiKeyConfig,
   ): Promise<ChatCompletionResponse> {
-    this.resolveRoute(dto, apiKey);
+    const route = this.resolveRoute(dto, apiKey);
+    this.enforceRouteLimits(dto, route);
     const result = await this.orchestrationService.generate(
       this.toOrchestrationRequest(dto),
     );
@@ -73,7 +74,8 @@ export class ChatCompletionsService {
     dto: ChatCompletionRequestDto,
     apiKey: ApiKeyConfig,
   ): StreamPreparation {
-    this.resolveRoute(dto, apiKey);
+    const route = this.resolveRoute(dto, apiKey);
+    this.enforceRouteLimits(dto, route);
     return {
       id: this.generateId(),
       created: this.now(),
@@ -96,6 +98,53 @@ export class ChatCompletionsService {
       throw GatewayApiException.forbidden();
     }
     return route;
+  }
+
+  /**
+   * Spec 005 Fase 1.3: reject requests whose size exceeds the limits declared
+   * by the active route BEFORE any orchestration or SSE byte is produced. Each
+   * limit is optional in config (`undefined` = unbounded). Violations surface
+   * as an OpenAI-compatible 400, never a half-open stream, so this runs
+   * synchronously in both the non-streaming and streaming entrypoints.
+   */
+  private enforceRouteLimits(
+    dto: ChatCompletionRequestDto,
+    route: RouteConfig,
+  ): void {
+    if (
+      route.maxMessages !== undefined &&
+      dto.messages.length > route.maxMessages
+    ) {
+      throw GatewayApiException.badRequest(
+        `The request has ${dto.messages.length} messages, which exceeds the route limit of ${route.maxMessages}.`,
+        'too_many_messages',
+        'messages',
+      );
+    }
+
+    if (route.maxMessageContentLength !== undefined) {
+      const limit = route.maxMessageContentLength;
+      const offending = dto.messages.findIndex(
+        (message) => message.content.length > limit,
+      );
+      if (offending !== -1) {
+        throw GatewayApiException.badRequest(
+          `Message at index ${offending} exceeds the route content-length limit of ${limit} characters.`,
+          'message_too_long',
+          `messages[${offending}].content`,
+        );
+      }
+    }
+
+    if (route.maxPayloadBytes !== undefined) {
+      const payloadBytes = Buffer.byteLength(JSON.stringify(dto), 'utf8');
+      if (payloadBytes > route.maxPayloadBytes) {
+        throw GatewayApiException.badRequest(
+          `The request payload of ${payloadBytes} bytes exceeds the route limit of ${route.maxPayloadBytes} bytes.`,
+          'payload_too_large',
+        );
+      }
+    }
   }
 
   private toOrchestrationRequest(

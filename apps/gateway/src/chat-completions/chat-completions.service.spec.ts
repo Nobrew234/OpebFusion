@@ -26,7 +26,11 @@ function buildDto(
   return dto;
 }
 
-function makeRoute(key: string, publicModel: string): RouteConfig {
+function makeRoute(
+  key: string,
+  publicModel: string,
+  overrides: Partial<RouteConfig> = {},
+): RouteConfig {
   return {
     key,
     publicModel,
@@ -35,6 +39,7 @@ function makeRoute(key: string, publicModel: string): RouteConfig {
     maxDelegations: 0,
     maxDepth: 1,
     streamFinalOnly: true,
+    ...overrides,
   };
 }
 
@@ -144,6 +149,95 @@ describe('ChatCompletionsService', () => {
         expect(err).toBeInstanceOf(GatewayApiException);
         expect((err as GatewayApiException).getStatus()).toBe(403);
       }
+    });
+  });
+
+  describe('route limit enforcement (spec 005 Fase 1)', () => {
+    function serviceWithRoute(route: RouteConfig): ChatCompletionsService {
+      const keyForRoute: ApiKeyConfig = {
+        id: 'key-1',
+        token: 'secret-token',
+        allowedRoutes: [route.key],
+      };
+      const config = makeFakeConfigService([route]);
+      config.findApiKeyByToken = (token: string) =>
+        token === keyForRoute.token ? keyForRoute : undefined;
+      return new ChatCompletionsService(config, makeFakeOrchestrationService());
+    }
+
+    function makeMessages(count: number, content = 'hi'): MessageDto[] {
+      return Array.from({ length: count }, () =>
+        Object.assign(new MessageDto(), { role: 'user', content }),
+      );
+    }
+
+    it('rejects with 400 when the message count exceeds maxMessages', async () => {
+      const route = makeRoute('route-a', 'gpt-4o', { maxMessages: 2 });
+      const service = serviceWithRoute(route);
+      const dto = buildDto({ messages: makeMessages(3) });
+
+      try {
+        await service.createCompletion(dto, apiKey);
+        fail('expected rejection');
+      } catch (err) {
+        expect(err).toBeInstanceOf(GatewayApiException);
+        expect((err as GatewayApiException).getStatus()).toBe(400);
+      }
+    });
+
+    it('rejects with 400 when a message content exceeds maxMessageContentLength', async () => {
+      const route = makeRoute('route-a', 'gpt-4o', {
+        maxMessageContentLength: 5,
+      });
+      const service = serviceWithRoute(route);
+      const dto = buildDto({ messages: makeMessages(1, 'way too long') });
+
+      try {
+        await service.createCompletion(dto, apiKey);
+        fail('expected rejection');
+      } catch (err) {
+        expect(err).toBeInstanceOf(GatewayApiException);
+        expect((err as GatewayApiException).getStatus()).toBe(400);
+      }
+    });
+
+    it('rejects with 400 when the serialized payload exceeds maxPayloadBytes', async () => {
+      const route = makeRoute('route-a', 'gpt-4o', { maxPayloadBytes: 10 });
+      const service = serviceWithRoute(route);
+      const dto = buildDto({
+        messages: makeMessages(1, 'a fairly long message'),
+      });
+
+      try {
+        await service.createCompletion(dto, apiKey);
+        fail('expected rejection');
+      } catch (err) {
+        expect(err).toBeInstanceOf(GatewayApiException);
+        expect((err as GatewayApiException).getStatus()).toBe(400);
+      }
+    });
+
+    it('accepts a request within all configured limits', async () => {
+      const route = makeRoute('route-a', 'gpt-4o', {
+        maxMessages: 5,
+        maxMessageContentLength: 100,
+        maxPayloadBytes: 100000,
+      });
+      const service = serviceWithRoute(route);
+      const dto = buildDto({ messages: makeMessages(2) });
+
+      const envelope = await service.createCompletion(dto, apiKey);
+      expect(envelope.object).toBe('chat.completion');
+    });
+
+    it('enforces limits synchronously in prepareStream before any chunk', () => {
+      const route = makeRoute('route-a', 'gpt-4o', { maxMessages: 1 });
+      const service = serviceWithRoute(route);
+      const dto = buildDto({ messages: makeMessages(3), stream: true });
+
+      expect(() => service.prepareStream(dto, apiKey)).toThrow(
+        GatewayApiException,
+      );
     });
   });
 
