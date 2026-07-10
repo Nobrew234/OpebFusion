@@ -55,12 +55,15 @@ function makeFakeConfigService(routes: RouteConfig[]): ConfigService {
       providers: [],
       models: [],
       routes,
+      observability: { logLevel: 'info', redact: [] },
     }),
     findApiKeyByToken: (token: string) =>
       token === apiKey.token ? apiKey : undefined,
     findRouteByPublicModel: (publicModel: string) =>
       routes.find((r) => r.publicModel === publicModel),
     findModelByKey: () => undefined,
+    findProviderByName: () => undefined,
+    getObservability: () => ({ logLevel: 'info', redact: [] }),
     getPublicModels: () =>
       routes.map((r) => ({ id: r.publicModel, ownedBy: 'open-fusion' })),
   };

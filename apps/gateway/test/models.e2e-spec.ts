@@ -36,11 +36,14 @@ function buildFakeConfigService(): ConfigService {
           streamFinalOnly: true,
         },
       ],
+      observability: { logLevel: 'info', redact: [] },
     }),
     findApiKeyByToken: (token: string) =>
       token === VALID_TOKEN ? apiKey : undefined,
     findRouteByPublicModel: () => undefined,
     findModelByKey: () => undefined,
+    findProviderByName: () => undefined,
+    getObservability: () => ({ logLevel: 'info', redact: [] }),
     getPublicModels: () => publicModels,
   };
 }

@@ -59,7 +59,7 @@ const fixtureAppConfig: AppConfig = {
   serverPort: 3000,
   apiKeys: [allowedApiKey],
   providers: [
-    { name: 'openrouter', type: 'openrouter', apiKeyEnv: 'OPENROUTER_API_KEY' },
+    { name: 'openrouter', type: 'openrouter', apiKey: 'test-openrouter-key' },
   ],
   models: [
     {
@@ -71,6 +71,7 @@ const fixtureAppConfig: AppConfig = {
     },
   ],
   routes,
+  observability: { logLevel: 'info', redact: ['apiKey', 'token'] },
 };
 
 const fakeConfigService: ConfigService = {
@@ -81,6 +82,9 @@ const fakeConfigService: ConfigService = {
     fixtureAppConfig.routes.find((r) => r.publicModel === publicModel),
   findModelByKey: (key: string) =>
     fixtureAppConfig.models.find((m) => m.key === key),
+  findProviderByName: (name: string) =>
+    fixtureAppConfig.providers.find((p) => p.name === name),
+  getObservability: () => fixtureAppConfig.observability,
   getPublicModels: () =>
     fixtureAppConfig.routes.map((r) => ({
       id: r.publicModel,

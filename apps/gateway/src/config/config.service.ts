@@ -4,6 +4,8 @@ import {
   AppConfig,
   ConfigService as ConfigServiceContract,
   ModelConfig,
+  ObservabilityConfig,
+  ProviderConfig,
   PublicModel,
   RouteConfig,
 } from './config.interfaces';
@@ -40,6 +42,14 @@ export class ConfigService implements ConfigServiceContract {
 
   findModelByKey(key: string): ModelConfig | undefined {
     return this.config.models.find((model) => model.key === key);
+  }
+
+  findProviderByName(name: string): ProviderConfig | undefined {
+    return this.config.providers.find((provider) => provider.name === name);
+  }
+
+  getObservability(): ObservabilityConfig {
+    return this.config.observability;
   }
 
   getPublicModels(): PublicModel[] {

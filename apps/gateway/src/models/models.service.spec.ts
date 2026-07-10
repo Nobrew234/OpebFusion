@@ -14,10 +14,13 @@ function buildFakeConfigService(publicModels: PublicModel[]): ConfigService {
       providers: [],
       models: [],
       routes: [],
+      observability: { logLevel: 'info', redact: [] },
     }),
     findApiKeyByToken: () => undefined,
     findRouteByPublicModel: () => undefined,
     findModelByKey: () => undefined,
+    findProviderByName: () => undefined,
+    getObservability: () => ({ logLevel: 'info', redact: [] }),
     getPublicModels: () => publicModels,
   };
 }

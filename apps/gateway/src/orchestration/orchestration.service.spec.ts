@@ -120,11 +120,12 @@ function makeConfigService(route: RouteConfig): ConfigService {
       {
         name: 'openrouter',
         type: 'openrouter',
-        apiKeyEnv: 'OPENROUTER_API_KEY',
+        apiKey: 'test-openrouter-key',
       },
     ],
     models: MODELS,
     routes: [route],
+    observability: { logLevel: 'info', redact: ['apiKey', 'token'] },
   };
   return {
     get: () => config,
@@ -132,6 +133,8 @@ function makeConfigService(route: RouteConfig): ConfigService {
     findRouteByPublicModel: (publicModel) =>
       config.routes.find((r) => r.publicModel === publicModel),
     findModelByKey: (key) => config.models.find((m) => m.key === key),
+    findProviderByName: (name) => config.providers.find((p) => p.name === name),
+    getObservability: () => config.observability,
     getPublicModels: () =>
       config.routes.map((r) => ({ id: r.publicModel, ownedBy: 'open-fusion' })),
   };

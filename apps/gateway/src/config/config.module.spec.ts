@@ -23,6 +23,7 @@ describe('ConfigModule', () => {
     process.env.OPEN_FUSION_CONFIG = fixturePath('valid.config.json');
     process.env.OPEN_FUSION_FIXTURE_TOKEN = 'fixture-token-1';
     process.env.OPEN_FUSION_FIXTURE_TOKEN_2 = 'fixture-token-2';
+    process.env.OPENROUTER_API_KEY = 'openrouter-secret';
   });
 
   afterEach(() => {
