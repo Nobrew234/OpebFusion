@@ -9,6 +9,7 @@ const route: RouteConfig = {
   maxDelegations: 2,
   maxDepth: 1,
   streamFinalOnly: true,
+  allowExternalTools: false,
 };
 
 const delegateModels: ModelConfig[] = [

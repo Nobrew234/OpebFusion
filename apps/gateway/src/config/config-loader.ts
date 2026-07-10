@@ -516,6 +516,19 @@ function validateRoutes(
       streamFinalOnly = value.streamFinalOnly;
     }
 
+    // allowExternalTools: optional boolean, defaults to false (spec 005). A
+    // route must opt in explicitly before client tools are forwarded.
+    let allowExternalTools = false;
+    if (value.allowExternalTools !== undefined) {
+      if (typeof value.allowExternalTools !== 'boolean') {
+        throw new ConfigLoadError(
+          `${fieldPrefix}.allowExternalTools`,
+          `must be a boolean when set, got ${JSON.stringify(value.allowExternalTools)}`,
+        );
+      }
+      allowExternalTools = value.allowExternalTools;
+    }
+
     return {
       key,
       publicModel: value.publicModel,
@@ -531,6 +544,7 @@ function validateRoutes(
         : {}),
       ...(maxPayloadBytes !== undefined ? { maxPayloadBytes } : {}),
       streamFinalOnly,
+      allowExternalTools,
     };
   });
 }

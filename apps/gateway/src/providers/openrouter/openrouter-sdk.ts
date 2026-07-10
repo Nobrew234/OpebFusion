@@ -127,6 +127,12 @@ export class RealOpenRouterSdk implements OpenRouterSdk {
   private toSdkOptions(options: SdkGenerateOptions): {
     model: LanguageModel;
     messages: ModelMessage[];
+    // AI SDK v7 rejects `system`-role messages inside `messages` unless this is
+    // set (default false), demanding the top-level `instructions` option
+    // instead. The orchestration engine composes system prompts inline, so we
+    // opt back into inline system messages here — the one place bound to the
+    // real SDK. OpenRouter chat models accept system messages natively.
+    allowSystemInMessages: boolean;
     tools?: ToolSet;
     temperature?: number;
     topP?: number;
@@ -149,6 +155,7 @@ export class RealOpenRouterSdk implements OpenRouterSdk {
     return {
       model: options.model as LanguageModel,
       messages: options.messages as unknown as ModelMessage[],
+      allowSystemInMessages: true,
       ...(tools ? { tools } : {}),
       ...(options.temperature !== undefined
         ? { temperature: options.temperature }

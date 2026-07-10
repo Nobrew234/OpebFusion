@@ -71,6 +71,13 @@ export interface RouteConfig {
   maxMessageContentLength?: number;
   maxPayloadBytes?: number;
   streamFinalOnly: boolean;
+  /**
+   * Whether client-supplied external tools are forwarded to the orchestrator
+   * for this route (spec 005 "Tool calling"). Defaults to `false`: unless a
+   * route opts in explicitly, external tools are dropped and never reach a
+   * provider. The internal `delegate_llm` tool is unaffected by this flag.
+   */
+  allowExternalTools: boolean;
 }
 
 export interface AppConfig {

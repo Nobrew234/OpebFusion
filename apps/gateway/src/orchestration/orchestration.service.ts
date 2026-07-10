@@ -8,10 +8,13 @@ import type {
 import { GatewayApiException } from '../common/errors/gateway-api.exception';
 import { MODEL_INVOKER } from '../providers/model-invoker.interfaces';
 import type {
+  InvocationFinishReason,
   InvocationMessage,
   InvocationUsage,
+  ModelInvocationResult,
   ModelInvoker,
   ModelToolCall,
+  ToolSpec,
 } from '../providers/model-invoker.interfaces';
 import {
   DELEGATE_LLM_TOOL_NAME,
@@ -21,6 +24,7 @@ import {
 } from './delegate-llm.tool';
 import {
   ChatMessage,
+  FinalToolCall,
   FinishReason,
   OrchestrationChunk,
   OrchestrationRequest,
@@ -104,9 +108,17 @@ export class OrchestrationService implements OrchestrationServiceContract {
       },
       ...request.messages.map(this.toInvocationMessage),
     ];
-    const tools = canDelegate
-      ? [delegateLlmToolSpec(route.allowedDelegateModels)]
-      : [];
+    // Tools offered to the orchestrator: the internal delegate_llm (when the
+    // route can delegate) plus any client external tools the route allows.
+    // externalTools arrive already gated by the HTTP layer; we still strip any
+    // that impersonate the internal tool name as a defense in depth.
+    const externalTools = this.sanitizeExternalTools(request.externalTools);
+    const tools: ToolSpec[] = [
+      ...(canDelegate
+        ? [delegateLlmToolSpec(route.allowedDelegateModels)]
+        : []),
+      ...externalTools,
+    ];
 
     let usage = this.zeroUsage();
     const state = { delegations: 0 };
@@ -132,11 +144,7 @@ export class OrchestrationService implements OrchestrationServiceContract {
         (call) => call.name === DELEGATE_LLM_TOOL_NAME,
       );
       if (delegateCalls.length === 0) {
-        return {
-          content: result.content,
-          finishReason: this.toFinalFinishReason(result.finishReason),
-          usage,
-        };
+        return this.buildFinalResult(result, usage);
       }
 
       messages.push({
@@ -160,11 +168,12 @@ export class OrchestrationService implements OrchestrationServiceContract {
     }
 
     // Steps exhausted without a direct answer: force one final orchestrator
-    // turn with no tools so it must produce the final response.
+    // turn offering no internal delegation (external tools stay available so
+    // an allowed client tool can still be requested in the final answer).
     const finalResult = await this.modelInvoker.invoke({
       modelKey: route.orchestrator,
       messages,
-      tools: [],
+      tools: externalTools,
       temperature: request.temperature,
       topP: request.topP,
       maxTokens: request.maxTokens,
@@ -172,11 +181,52 @@ export class OrchestrationService implements OrchestrationServiceContract {
       timeoutMs: route.timeoutMs,
     });
     usage = this.addUsage(usage, finalResult.usage);
+    return this.buildFinalResult(finalResult, usage);
+  }
+
+  /**
+   * Builds the public OrchestrationResult from a final model result. Any
+   * client-visible (non-delegate) tool calls the model requested are surfaced
+   * as `toolCalls` with JSON-encoded arguments (spec 005 Fase 5/6); internal
+   * `delegate_llm` calls are never included.
+   */
+  private buildFinalResult(
+    result: ModelInvocationResult,
+    usage: OrchestrationUsage,
+  ): OrchestrationResult {
+    const finalToolCalls: FinalToolCall[] = result.toolCalls
+      .filter((call) => call.name !== DELEGATE_LLM_TOOL_NAME)
+      .map((call) => ({
+        id: call.id,
+        name: call.name,
+        arguments: JSON.stringify(call.arguments ?? {}),
+      }));
+    let finishReason = this.toFinalFinishReason(result.finishReason);
+    // If the SDK reported tool_calls but every call was an internal delegation
+    // (filtered out above), there is nothing client-visible to call. Never emit
+    // a tool_calls finish_reason with an empty tool_calls array — that would
+    // break the OpenAI contract — so fall back to stop.
+    if (finishReason === 'tool_calls' && finalToolCalls.length === 0) {
+      finishReason = 'stop';
+    }
     return {
-      content: finalResult.content,
-      finishReason: this.toFinalFinishReason(finalResult.finishReason),
+      content: result.content,
+      finishReason,
       usage,
+      ...(finalToolCalls.length > 0 ? { toolCalls: finalToolCalls } : {}),
     };
+  }
+
+  /**
+   * Drops any external tool that reuses the internal `delegate_llm` name so a
+   * client can never smuggle or shadow the internal delegation tool
+   * (AGENTS.md: `delegate_llm` is internal and never client-choosable).
+   */
+  private sanitizeExternalTools(tools: ToolSpec[] | undefined): ToolSpec[] {
+    if (!tools || tools.length === 0) {
+      return [];
+    }
+    return tools.filter((tool) => tool.name !== DELEGATE_LLM_TOOL_NAME);
   }
 
   /**
@@ -292,12 +342,12 @@ export class OrchestrationService implements OrchestrationServiceContract {
     return JSON.stringify({ error: code, message });
   }
 
-  private toFinalFinishReason(
-    reason: 'stop' | 'length' | 'tool_calls' | 'content_filter',
-  ): FinishReason {
-    // The public envelope for spec 002 only distinguishes stop/length; richer
-    // finish_reason mapping (tool_calls, content_filter) is spec 005's remit.
-    return reason === 'length' ? 'length' : 'stop';
+  private toFinalFinishReason(reason: InvocationFinishReason): FinishReason {
+    // Spec 005 "Finish reasons": the SDK's finish reason maps 1:1 onto the
+    // public envelope value. `stop`/`length`/`tool_calls`/`content_filter` all
+    // pass through; the SDK never surfaces `error` here (a hard failure throws
+    // and is converted to an HTTP error upstream instead).
+    return reason;
   }
 
   private zeroUsage(): OrchestrationUsage {
