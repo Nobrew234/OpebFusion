@@ -71,7 +71,8 @@ Cada entrada persistida deve conter, no minimo:
 - evento (`gateway.boot`, `request.completed`, `request.failed`, `exception.caught`);
 - metodo e rota publica quando aplicavel;
 - status e latencia total quando aplicavel;
-- modelo publico e flag de streaming quando aplicavel;
+- modelo publico (`model`) e flag de streaming quando aplicavel;
+- modelo real resolvido pela orquestracao (`resolvedModel`) e, quando houver delegacao, os modelos delegados (`delegatedModels`) — para que um operador veja qual LLM efetivamente respondeu por tras do alias publico, sem que nenhum conteudo delegado vaze;
 - erro normalizado quando houver.
 
 Timestamps devem ser gravados em UTC de forma consistente.

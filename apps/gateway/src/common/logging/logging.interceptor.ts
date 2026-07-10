@@ -10,11 +10,14 @@ import { appendLog } from './log-file';
 import { getRequestLogContext } from './request-context';
 
 /**
- * Logs one line per HTTP request to logs/gateway.log: outcome, latency, and the
- * requested model (the field an operator most wants when a client like opencode
- * misbehaves). Registered globally in main.ts. Runs before the route handler,
- * so the `requestId` it stamps is available to the controller and the exception
- * filter for correlation.
+ * Logs one line per HTTP request to logs/gateway.log: outcome, latency, the
+ * client-requested `model` alias, and the `resolvedModel` (plus any
+ * `delegatedModels`) the orchestration layer actually invoked behind that alias
+ * — the fields an operator most wants when a client like opencode misbehaves.
+ * Registered globally in main.ts. Runs before the route handler, so the
+ * `requestId` it stamps is available to the controller and the exception filter
+ * for correlation, and the `resolvedModel` the service stamps on the same
+ * context is visible here by the time the completion tap fires.
  *
  * The error branch here is intentionally shallow (message only) — the full
  * stack of a swallowed internal error is logged by OpenAiExceptionFilter, which
