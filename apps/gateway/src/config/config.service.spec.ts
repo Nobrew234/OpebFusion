@@ -51,9 +51,79 @@ describe('ConfigService', () => {
         },
       ]);
       expect(config.routes).toEqual([
-        { key: 'default', publicModel: 'open-fusion/default' },
-        { key: 'secondary', publicModel: 'open-fusion/secondary' },
+        {
+          key: 'default',
+          publicModel: 'open-fusion/default',
+          orchestrator: 'orchestrator.default',
+          allowedDelegateModels: ['worker.fast'],
+          maxDelegations: 3,
+          maxDepth: 1,
+          timeoutMs: 60000,
+          delegateTimeoutMs: 30000,
+          maxMessages: 128,
+          maxMessageContentLength: 32768,
+          maxPayloadBytes: 1048576,
+          streamFinalOnly: true,
+        },
+        {
+          key: 'secondary',
+          publicModel: 'open-fusion/secondary',
+          orchestrator: 'orchestrator.default',
+          allowedDelegateModels: [],
+          maxDelegations: 0,
+          maxDepth: 1,
+          streamFinalOnly: true,
+        },
       ]);
+    });
+
+    it('parses providers and models from the file', () => {
+      const service = new ConfigService();
+      const config = service.get();
+
+      expect(config.providers).toEqual([
+        {
+          name: 'openrouter',
+          type: 'openrouter',
+          apiKeyEnv: 'OPENROUTER_API_KEY',
+          baseUrl: 'https://openrouter.ai/api/v1',
+          headers: {
+            'HTTP-Referer': 'https://example.com',
+            'X-Title': 'Open Fusion',
+          },
+        },
+      ]);
+      expect(config.models).toEqual([
+        {
+          key: 'orchestrator.default',
+          provider: 'openrouter',
+          model: 'openai/gpt-4.1',
+          role: 'orchestrator',
+          capabilities: [],
+          defaults: { temperature: 0.2 },
+        },
+        {
+          key: 'worker.fast',
+          provider: 'openrouter',
+          model: 'openai/gpt-4.1-mini',
+          role: 'delegate',
+          capabilities: ['general', 'fast_draft'],
+          defaults: { temperature: 0.3 },
+        },
+      ]);
+    });
+
+    it('findModelByKey returns the matching model', () => {
+      const service = new ConfigService();
+      expect(service.findModelByKey('worker.fast')?.role).toBe('delegate');
+      expect(service.findModelByKey('orchestrator.default')?.role).toBe(
+        'orchestrator',
+      );
+    });
+
+    it('findModelByKey returns undefined for an unknown key', () => {
+      const service = new ConfigService();
+      expect(service.findModelByKey('nope')).toBeUndefined();
     });
 
     it('findApiKeyByToken returns the matching api key', () => {
@@ -75,6 +145,11 @@ describe('ConfigService', () => {
       expect(service.findRouteByPublicModel('open-fusion/secondary')).toEqual({
         key: 'secondary',
         publicModel: 'open-fusion/secondary',
+        orchestrator: 'orchestrator.default',
+        allowedDelegateModels: [],
+        maxDelegations: 0,
+        maxDepth: 1,
+        streamFinalOnly: true,
       });
     });
 
@@ -167,6 +242,26 @@ describe('ConfigService', () => {
         'route missing publicModel',
         'invalid-route-missing-publicmodel.config.json',
         'routes.default.publicModel',
+      ],
+      [
+        'model references unknown provider',
+        'invalid-model-unknown-provider.config.json',
+        'models.orchestrator.default.provider',
+      ],
+      [
+        'route maxDepth not 1',
+        'invalid-route-maxdepth-not-one.config.json',
+        'routes.default.maxDepth',
+      ],
+      [
+        'route orchestrator has delegate role',
+        'invalid-route-orchestrator-role.config.json',
+        'routes.default.orchestrator',
+      ],
+      [
+        'allowedDelegateModels entry has orchestrator role',
+        'invalid-route-delegate-role.config.json',
+        'routes.default.allowedDelegateModels[0]',
       ],
     ])(
       'throws naming the field path for %s',

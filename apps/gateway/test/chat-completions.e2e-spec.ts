@@ -38,14 +38,38 @@ const allowedApiKey: ApiKeyConfig = {
   allowedRoutes: ['route-allowed'],
 };
 
+function e2eRoute(key: string, publicModel: string): RouteConfig {
+  return {
+    key,
+    publicModel,
+    orchestrator: 'orchestrator.default',
+    allowedDelegateModels: [],
+    maxDelegations: 0,
+    maxDepth: 1,
+    streamFinalOnly: true,
+  };
+}
+
 const routes: RouteConfig[] = [
-  { key: 'route-allowed', publicModel: 'gpt-4o' },
-  { key: 'route-restricted', publicModel: 'restricted-model' },
+  e2eRoute('route-allowed', 'gpt-4o'),
+  e2eRoute('route-restricted', 'restricted-model'),
 ];
 
 const fixtureAppConfig: AppConfig = {
   serverPort: 3000,
   apiKeys: [allowedApiKey],
+  providers: [
+    { name: 'openrouter', type: 'openrouter', apiKeyEnv: 'OPENROUTER_API_KEY' },
+  ],
+  models: [
+    {
+      key: 'orchestrator.default',
+      provider: 'openrouter',
+      model: 'openai/gpt-4.1',
+      role: 'orchestrator',
+      capabilities: [],
+    },
+  ],
   routes,
 };
 
@@ -55,6 +79,8 @@ const fakeConfigService: ConfigService = {
     fixtureAppConfig.apiKeys.find((k) => k.token === token),
   findRouteByPublicModel: (publicModel: string) =>
     fixtureAppConfig.routes.find((r) => r.publicModel === publicModel),
+  findModelByKey: (key: string) =>
+    fixtureAppConfig.models.find((m) => m.key === key),
   getPublicModels: () =>
     fixtureAppConfig.routes.map((r) => ({
       id: r.publicModel,
