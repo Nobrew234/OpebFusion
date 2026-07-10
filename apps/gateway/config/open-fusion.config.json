@@ -26,7 +26,7 @@
   "models": {
     "orchestrator.default": {
       "provider": "openrouter",
-      "model": "openai/gpt-4.1",
+      "model": "nvidia/nemotron-nano-9b-v2:free",
       "role": "orchestrator",
       "defaults": {
         "temperature": 0.2
@@ -34,7 +34,7 @@
     },
     "worker.fast": {
       "provider": "openrouter",
-      "model": "openai/gpt-4.1-mini",
+      "model": "openai/gpt-oss-20b:free",
       "role": "delegate",
       "capabilities": ["general", "fast_draft"],
       "defaults": {
