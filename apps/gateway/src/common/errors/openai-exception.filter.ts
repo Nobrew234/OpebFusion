@@ -5,7 +5,9 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { appendLog } from '../logging/log-file';
+import { getRequestLogContext } from '../logging/request-context';
 import { GatewayErrorBody, GatewayErrorType } from './gateway-api.exception';
 
 /**
@@ -24,6 +26,23 @@ export class OpenAiExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
+
+    // Record the ORIGINAL error before it is hidden from the wire. The client
+    // only ever sees the generic OpenAI envelope below (no stack, no provider
+    // detail), so this file line is the sole surviving trace of what actually
+    // went wrong. `message`/`stack` frequently embed a provider URL with a
+    // token, an `Authorization` fragment, or the user's prompt — appendLog
+    // sanitizes every field before it reaches disk (spec 006), so persisting
+    // them here is safe and never leaks a secret.
+    appendLog('error', 'exception.caught', {
+      requestId: getRequestLogContext(request).requestId,
+      name: exception instanceof Error ? exception.name : typeof exception,
+      status: exception instanceof HttpException ? exception.getStatus() : 500,
+      message:
+        exception instanceof Error ? exception.message : String(exception),
+      stack: exception instanceof Error ? exception.stack : undefined,
+    });
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();

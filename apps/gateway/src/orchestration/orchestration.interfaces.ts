@@ -62,6 +62,15 @@ export interface OrchestrationResult {
    * appear here.
    */
   toolCalls?: FinalToolCall[];
+  /**
+   * The real provider model id that produced the final answer (spec 006
+   * observability): the answering orchestrator's concrete model, not the
+   * internal key or the public route alias. Optional so lightweight test
+   * doubles need not supply it; the real engine always does.
+   */
+  resolvedModel?: string;
+  /** Real provider model ids of any models actually delegated to (deduped). */
+  delegatedModels?: string[];
 }
 
 export interface OrchestrationChunk {
@@ -69,6 +78,10 @@ export interface OrchestrationChunk {
   delta: string;
   /** Non-null only on the terminal chunk. */
   finishReason: FinishReason | null;
+  /** Set only on the terminal chunk: the real model that produced the answer. */
+  resolvedModel?: string;
+  /** Set only on the terminal chunk: real provider ids delegated to. */
+  delegatedModels?: string[];
 }
 
 export const ORCHESTRATION_SERVICE = Symbol('ORCHESTRATION_SERVICE');

@@ -43,7 +43,11 @@ function makeConfigService(): ConfigService {
     findRouteByPublicModel: () => undefined,
     findModelByKey: (key) => models.find((m) => m.key === key),
     findProviderByName: (name) => providers.find((p) => p.name === name),
-    getObservability: () => ({ logLevel: 'info', redact: [] }),
+    getObservability: () => ({
+      logLevel: 'info',
+      redact: [],
+      logFile: { maxSizeBytes: 10485760, maxFiles: 5 },
+    }),
     getPublicModels: () => [],
   };
 }

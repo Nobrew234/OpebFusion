@@ -30,10 +30,22 @@ export interface ProviderConfig {
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
+/**
+ * Size-based rotation/retention policy for the structured log file (spec 006,
+ * "Rotacao e retencao"). Both fields have safe defaults so the section can be
+ * omitted; when set they bound total disk use so the log cannot grow without
+ * limit. `maxFiles` is how many rotated files (`.1`..`.N`) are kept.
+ */
+export interface LogFileConfig {
+  maxSizeBytes: number;
+  maxFiles: number;
+}
+
 export interface ObservabilityConfig {
   logLevel: LogLevel;
   /** Key names whose values must be redacted before any structured logging. */
   redact: string[];
+  logFile: LogFileConfig;
 }
 
 export type ModelRole = 'orchestrator' | 'delegate';

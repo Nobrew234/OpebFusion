@@ -80,6 +80,7 @@ function e2eRoute(key: string, publicModel: string): RouteConfig {
     maxDelegations: 0,
     maxDepth: 1,
     streamFinalOnly: true,
+    allowExternalTools: false,
   };
 }
 
@@ -104,7 +105,11 @@ const fixtureAppConfig: AppConfig = {
     },
   ],
   routes,
-  observability: { logLevel: 'info', redact: ['apiKey', 'token'] },
+  observability: {
+    logLevel: 'info',
+    redact: ['apiKey', 'token'],
+    logFile: { maxSizeBytes: 10485760, maxFiles: 5 },
+  },
 };
 
 const fakeConfigService: ConfigService = {

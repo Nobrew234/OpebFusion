@@ -15,6 +15,7 @@ import type {
 } from '../orchestration/orchestration.interfaces';
 import { GatewayApiException } from '../common/errors/gateway-api.exception';
 import { DELEGATE_LLM_TOOL_NAME } from '../orchestration/delegate-llm.tool';
+import type { RequestLogContext } from '../common/logging/request-context';
 import type { ToolSpec } from '../providers/model-invoker.interfaces';
 import { ChatCompletionRequestDto } from './dto/chat-completion-request.dto';
 
@@ -65,11 +66,17 @@ export class ChatCompletionsService {
   async createCompletion(
     dto: ChatCompletionRequestDto,
     apiKey: ApiKeyConfig,
+    logContext?: RequestLogContext,
   ): Promise<ChatCompletionResponse> {
     const route = this.resolveRoute(dto, apiKey);
     this.enforceRouteLimits(dto, route);
     const result = await this.orchestrationService.generate(
       this.toOrchestrationRequest(dto, route),
+    );
+    this.stampResolvedModel(
+      logContext,
+      result.resolvedModel,
+      result.delegatedModels,
     );
     return this.buildEnvelope(dto.model, result);
   }
@@ -85,17 +92,52 @@ export class ChatCompletionsService {
   prepareStream(
     dto: ChatCompletionRequestDto,
     apiKey: ApiKeyConfig,
+    logContext?: RequestLogContext,
   ): StreamPreparation {
     const route = this.resolveRoute(dto, apiKey);
     this.enforceRouteLimits(dto, route);
+    const chunks = this.orchestrationService.stream(
+      this.toOrchestrationRequest(dto, route),
+    );
     return {
       id: this.generateId(),
       created: this.now(),
       model: dto.model,
-      chunks: this.orchestrationService.stream(
-        this.toOrchestrationRequest(dto, route),
-      ),
+      // The resolved model is only known once orchestration runs, which happens
+      // lazily as the controller drains this iterable — so we stamp it as the
+      // terminal chunk (which carries it) passes through.
+      chunks: logContext ? this.stampFromStream(chunks, logContext) : chunks,
     };
+  }
+
+  private async *stampFromStream(
+    chunks: AsyncIterable<OrchestrationChunk>,
+    logContext: RequestLogContext,
+  ): AsyncIterable<OrchestrationChunk> {
+    for await (const chunk of chunks) {
+      if (chunk.resolvedModel) {
+        this.stampResolvedModel(
+          logContext,
+          chunk.resolvedModel,
+          chunk.delegatedModels,
+        );
+      }
+      yield chunk;
+    }
+  }
+
+  private stampResolvedModel(
+    logContext: RequestLogContext | undefined,
+    resolvedModel: string | undefined,
+    delegatedModels: string[] | undefined,
+  ): void {
+    if (!logContext || !resolvedModel) {
+      return;
+    }
+    logContext.resolvedModel = resolvedModel;
+    if (delegatedModels && delegatedModels.length > 0) {
+      logContext.delegatedModels = delegatedModels;
+    }
   }
 
   private resolveRoute(

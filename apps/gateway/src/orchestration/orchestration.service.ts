@@ -51,7 +51,7 @@ interface DelegationOutcome {
  *
  * Streaming note: spec 002 only requires that the client receives the final
  * answer and nothing internal (`streamFinalOnly`). Real token-level streaming
- * of the final target is deferred to spec 006 (routed streaming). Here
+ * of the final target is deferred to spec 007 (routed streaming). Here
  * `stream()` runs the full orchestration to obtain the final content, then
  * emits it as content deltas — so no delegation trace can ever reach the
  * public SSE stream.
@@ -81,7 +81,16 @@ export class OrchestrationService implements OrchestrationServiceContract {
     for (let i = 0; i < words.length; i++) {
       yield { delta: i === 0 ? words[i] : ` ${words[i]}`, finishReason: null };
     }
-    yield { delta: '', finishReason: result.finishReason };
+    // The terminal chunk carries the resolved model ids so the HTTP layer can
+    // stamp them on the request log without inspecting any delegated content.
+    yield {
+      delta: '',
+      finishReason: result.finishReason,
+      ...(result.resolvedModel ? { resolvedModel: result.resolvedModel } : {}),
+      ...(result.delegatedModels
+        ? { delegatedModels: result.delegatedModels }
+        : {}),
+    };
   }
 
   private resolveRoute(publicModel: string): RouteConfig {
@@ -120,8 +129,16 @@ export class OrchestrationService implements OrchestrationServiceContract {
       ...externalTools,
     ];
 
+    // The concrete provider model that will produce the final answer. Every
+    // answering turn runs the route orchestrator, so this is fixed up front and
+    // surfaced for the request log (spec 006 observability).
+    const resolvedModel = this.resolveModelId(route.orchestrator);
+
     let usage = this.zeroUsage();
-    const state = { delegations: 0 };
+    // `delegatedModelKeys` records only delegations that were actually invoked
+    // (not blocked/over-limit ones), in call order, so the request log can name
+    // the real models used without leaking any delegated content.
+    const state = { delegations: 0, delegatedModelKeys: [] as string[] };
     // Bound the orchestrator↔delegate loop: at most maxDelegations rounds of
     // tool calls, plus one final answering turn. This is a hard backstop even
     // if the orchestrator keeps requesting tools.
@@ -144,7 +161,7 @@ export class OrchestrationService implements OrchestrationServiceContract {
         (call) => call.name === DELEGATE_LLM_TOOL_NAME,
       );
       if (delegateCalls.length === 0) {
-        return this.buildFinalResult(result, usage);
+        return this.buildFinalResult(result, usage, resolvedModel, state);
       }
 
       messages.push({
@@ -181,7 +198,13 @@ export class OrchestrationService implements OrchestrationServiceContract {
       timeoutMs: route.timeoutMs,
     });
     usage = this.addUsage(usage, finalResult.usage);
-    return this.buildFinalResult(finalResult, usage);
+    return this.buildFinalResult(finalResult, usage, resolvedModel, state);
+  }
+
+  /** Resolves an internal model key to its real provider model id for logging,
+   *  falling back to the key itself if the model is somehow not configured. */
+  private resolveModelId(modelKey: string): string {
+    return this.configService.findModelByKey(modelKey)?.model ?? modelKey;
   }
 
   /**
@@ -193,6 +216,8 @@ export class OrchestrationService implements OrchestrationServiceContract {
   private buildFinalResult(
     result: ModelInvocationResult,
     usage: OrchestrationUsage,
+    resolvedModel: string,
+    state: { delegatedModelKeys: string[] },
   ): OrchestrationResult {
     const finalToolCalls: FinalToolCall[] = result.toolCalls
       .filter((call) => call.name !== DELEGATE_LLM_TOOL_NAME)
@@ -209,12 +234,31 @@ export class OrchestrationService implements OrchestrationServiceContract {
     if (finishReason === 'tool_calls' && finalToolCalls.length === 0) {
       finishReason = 'stop';
     }
+    const delegatedModels = this.resolveDelegatedModelIds(
+      state.delegatedModelKeys,
+    );
     return {
       content: result.content,
       finishReason,
       usage,
+      resolvedModel,
+      ...(delegatedModels.length > 0 ? { delegatedModels } : {}),
       ...(finalToolCalls.length > 0 ? { toolCalls: finalToolCalls } : {}),
     };
+  }
+
+  /** Maps invoked delegate keys to their real provider ids, deduped in order. */
+  private resolveDelegatedModelIds(delegatedModelKeys: string[]): string[] {
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    for (const key of delegatedModelKeys) {
+      const id = this.resolveModelId(key);
+      if (!seen.has(id)) {
+        seen.add(id);
+        ids.push(id);
+      }
+    }
+    return ids;
   }
 
   /**
@@ -239,7 +283,7 @@ export class OrchestrationService implements OrchestrationServiceContract {
   private async executeDelegation(
     call: ModelToolCall,
     route: RouteConfig,
-    state: { delegations: number },
+    state: { delegations: number; delegatedModelKeys: string[] },
   ): Promise<DelegationOutcome> {
     state.delegations += 1;
     if (state.delegations > route.maxDelegations) {
@@ -276,6 +320,9 @@ export class OrchestrationService implements OrchestrationServiceContract {
         tools: [],
         timeoutMs: route.delegateTimeoutMs,
       });
+      // Record only after a real invocation (an authorized, in-budget target)
+      // so the request log names the models actually used.
+      state.delegatedModelKeys.push(parsed.args.target_model);
       return {
         toolResultContent: this.wrapUntrusted(result.content),
         usage: result.usage,

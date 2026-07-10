@@ -430,6 +430,7 @@ describe('ConfigService', () => {
       expect(service.getObservability()).toEqual({
         logLevel: 'debug',
         redact: ['apiKey', 'token', 'authorization'],
+        logFile: { maxSizeBytes: 10 * 1024 * 1024, maxFiles: 5 },
       });
     });
 
@@ -439,6 +440,7 @@ describe('ConfigService', () => {
       expect(service.getObservability()).toEqual({
         logLevel: 'info',
         redact: ['apiKey', 'token', 'authorization'],
+        logFile: { maxSizeBytes: 10 * 1024 * 1024, maxFiles: 5 },
       });
     });
   });

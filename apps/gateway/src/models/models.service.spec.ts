@@ -14,13 +14,21 @@ function buildFakeConfigService(publicModels: PublicModel[]): ConfigService {
       providers: [],
       models: [],
       routes: [],
-      observability: { logLevel: 'info', redact: [] },
+      observability: {
+        logLevel: 'info',
+        redact: [],
+        logFile: { maxSizeBytes: 10485760, maxFiles: 5 },
+      },
     }),
     findApiKeyByToken: () => undefined,
     findRouteByPublicModel: () => undefined,
     findModelByKey: () => undefined,
     findProviderByName: () => undefined,
-    getObservability: () => ({ logLevel: 'info', redact: [] }),
+    getObservability: () => ({
+      logLevel: 'info',
+      redact: [],
+      logFile: { maxSizeBytes: 10485760, maxFiles: 5 },
+    }),
     getPublicModels: () => publicModels,
   };
 }

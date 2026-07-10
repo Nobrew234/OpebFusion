@@ -1,0 +1,18 @@
+{
+  "id": "5ae16dbc-98ac-4099-b457-756d4ce483a6",
+  "name": "mcp-activity",
+  "status": "active",
+  "repoPath": "C:\\Users\\Gisela\\Desktop\\OpebFusion",
+  "createdAt": "2026-07-10T18:37:38.583Z",
+  "updatedAt": "2026-07-10T18:37:38.589Z",
+  "startedAt": "2026-07-10T18:37:38.583Z",
+  "traceCount": 2,
+  "artifactCount": 0,
+  "checkpointCount": 0,
+  "checkpoints": [],
+  "metadata": {
+    "transport": "mcp",
+    "purpose": "tool-audit"
+  },
+  "lastTraceAt": "2026-07-10T18:37:38.589Z"
+}

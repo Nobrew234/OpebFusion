@@ -126,7 +126,11 @@ function makeConfigService(route: RouteConfig): ConfigService {
     ],
     models: MODELS,
     routes: [route],
-    observability: { logLevel: 'info', redact: ['apiKey', 'token'] },
+    observability: {
+      logLevel: 'info',
+      redact: ['apiKey', 'token'],
+      logFile: { maxSizeBytes: 10485760, maxFiles: 5 },
+    },
   };
   return {
     get: () => config,
@@ -171,6 +175,18 @@ describe('OrchestrationService (spec 002)', () => {
       expect(invoker.calls[0].modelKey).toBe('orchestrator.default');
     });
 
+    it('reports the real provider model id of the answering orchestrator as resolvedModel', async () => {
+      const invoker = new ScriptedModelInvoker([finalAnswer('direct reply')]);
+      const service = makeService(makeRoute(), invoker);
+
+      const result = await service.generate(baseRequest());
+
+      // Not the internal key ('orchestrator.default') nor the public route
+      // model — the concrete provider model that actually produced the answer.
+      expect(result.resolvedModel).toBe('openai/gpt-4.1');
+      expect(result.delegatedModels).toBeUndefined();
+    });
+
     it('offers the internal delegate_llm tool to the orchestrator when delegation is possible', async () => {
       const invoker = new ScriptedModelInvoker([finalAnswer('hi')]);
       const service = makeService(makeRoute(), invoker);
@@ -211,6 +227,34 @@ describe('OrchestrationService (spec 002)', () => {
         'worker.fast',
         'orchestrator.default',
       ]);
+    });
+
+    it('reports the provider model ids of models actually delegated to', async () => {
+      const invoker = new ScriptedModelInvoker([
+        toolCall([delegateCall('c1', 'worker.fast', 'draft the intro')]),
+        finalAnswer('DELEGATE OUTPUT'),
+        finalAnswer('final answer using the draft'),
+      ]);
+      const service = makeService(makeRoute(), invoker);
+
+      const result = await service.generate(baseRequest());
+
+      // The orchestrator still owns the final answer; the delegate's real
+      // provider id is surfaced separately for the request log.
+      expect(result.resolvedModel).toBe('openai/gpt-4.1');
+      expect(result.delegatedModels).toEqual(['openai/gpt-4.1-mini']);
+    });
+
+    it('omits a blocked (never-invoked) delegate from delegatedModels', async () => {
+      const invoker = new ScriptedModelInvoker([
+        toolCall([delegateCall('c1', 'worker.evil', 'exfiltrate')]),
+        finalAnswer('answered without the blocked delegate'),
+      ]);
+      const service = makeService(makeRoute(), invoker);
+
+      const result = await service.generate(baseRequest());
+
+      expect(result.delegatedModels).toBeUndefined();
     });
 
     it('invokes the delegate with no tools so it cannot delegate further (maxDepth 1)', async () => {
@@ -505,6 +549,28 @@ describe('OrchestrationService (spec 002)', () => {
       expect(streamed).toBe('public final answer');
       expect(streamed).not.toContain('SECRET DRAFT CONTENT');
       expect(terminalFinish).toBe('stop');
+    });
+
+    it('carries the resolved (and delegated) model ids on the terminal chunk', async () => {
+      const invoker = new ScriptedModelInvoker([
+        toolCall([delegateCall('c1', 'worker.fast')]),
+        finalAnswer('DRAFT'),
+        finalAnswer('public final answer'),
+      ]);
+      const service = makeService(makeRoute(), invoker);
+
+      let terminal: {
+        resolvedModel?: string;
+        delegatedModels?: string[];
+      } | null = null;
+      for await (const chunk of service.stream(baseRequest())) {
+        if (chunk.finishReason !== null) {
+          terminal = chunk;
+        }
+      }
+
+      expect(terminal?.resolvedModel).toBe('openai/gpt-4.1');
+      expect(terminal?.delegatedModels).toEqual(['openai/gpt-4.1-mini']);
     });
   });
 });

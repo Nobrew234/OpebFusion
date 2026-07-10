@@ -34,16 +34,25 @@ function buildFakeConfigService(): ConfigService {
           maxDelegations: 0,
           maxDepth: 1,
           streamFinalOnly: true,
+          allowExternalTools: false,
         },
       ],
-      observability: { logLevel: 'info', redact: [] },
+      observability: {
+        logLevel: 'info',
+        redact: [],
+        logFile: { maxSizeBytes: 10485760, maxFiles: 5 },
+      },
     }),
     findApiKeyByToken: (token: string) =>
       token === VALID_TOKEN ? apiKey : undefined,
     findRouteByPublicModel: () => undefined,
     findModelByKey: () => undefined,
     findProviderByName: () => undefined,
-    getObservability: () => ({ logLevel: 'info', redact: [] }),
+    getObservability: () => ({
+      logLevel: 'info',
+      redact: [],
+      logFile: { maxSizeBytes: 10485760, maxFiles: 5 },
+    }),
     getPublicModels: () => publicModels,
   };
 }

@@ -1,8 +1,8 @@
-# Spec 006: Routed Streaming with Internal Delegations
+# Spec 007: Routed Streaming with Internal Delegations
 
 ## Status
 
-Implemented
+Draft
 
 ## Objective
 

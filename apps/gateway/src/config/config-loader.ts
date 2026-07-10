@@ -3,6 +3,7 @@ import * as path from 'path';
 import {
   ApiKeyConfig,
   AppConfig,
+  LogFileConfig,
   LogLevel,
   ModelConfig,
   ModelRole,
@@ -50,6 +51,9 @@ const KNOWN_CAPABILITIES = [
 const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error'];
 
 const DEFAULT_REDACT = ['apiKey', 'token', 'authorization'];
+
+const DEFAULT_LOG_MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MiB
+const DEFAULT_LOG_MAX_FILES = 5;
 
 /**
  * Permissive local-dev mode (spec 003: "salvo em modo de validacao permissivo
@@ -587,7 +591,44 @@ function validateObservability(
     redact = observability.redact;
   }
 
-  return { logLevel, redact };
+  const logFile = validateLogFile(observability);
+
+  return { logLevel, redact, logFile };
+}
+
+/**
+ * Validates the optional `observability.logFile` rotation policy. Absent =
+ * defaults (10 MiB, 5 files). When present, each field must be a positive
+ * integer so the sink always has a sane, bounded rotation limit (spec 006).
+ */
+function validateLogFile(
+  observability: Record<string, unknown>,
+): LogFileConfig {
+  const raw = isPlainObject(observability.logFile) ? observability.logFile : {};
+
+  let maxSizeBytes = DEFAULT_LOG_MAX_SIZE_BYTES;
+  if (raw.maxSizeBytes !== undefined) {
+    if (!isPositiveInteger(raw.maxSizeBytes)) {
+      throw new ConfigLoadError(
+        'observability.logFile.maxSizeBytes',
+        `must be a positive integer when set, got ${JSON.stringify(raw.maxSizeBytes)}`,
+      );
+    }
+    maxSizeBytes = raw.maxSizeBytes;
+  }
+
+  let maxFiles = DEFAULT_LOG_MAX_FILES;
+  if (raw.maxFiles !== undefined) {
+    if (!isPositiveInteger(raw.maxFiles)) {
+      throw new ConfigLoadError(
+        'observability.logFile.maxFiles',
+        `must be a positive integer when set, got ${JSON.stringify(raw.maxFiles)}`,
+      );
+    }
+    maxFiles = raw.maxFiles;
+  }
+
+  return { maxSizeBytes, maxFiles };
 }
 
 /**

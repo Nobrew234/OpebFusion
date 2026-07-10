@@ -61,7 +61,11 @@ function makeFakeConfigService(routes: RouteConfig[]): ConfigService {
       providers: [],
       models: [],
       routes,
-      observability: { logLevel: 'info', redact: [] },
+      observability: {
+        logLevel: 'info',
+        redact: [],
+        logFile: { maxSizeBytes: 10485760, maxFiles: 5 },
+      },
     }),
     findApiKeyByToken: (token: string) =>
       token === apiKey.token ? apiKey : undefined,
@@ -69,7 +73,11 @@ function makeFakeConfigService(routes: RouteConfig[]): ConfigService {
       routes.find((r) => r.publicModel === publicModel),
     findModelByKey: () => undefined,
     findProviderByName: () => undefined,
-    getObservability: () => ({ logLevel: 'info', redact: [] }),
+    getObservability: () => ({
+      logLevel: 'info',
+      redact: [],
+      logFile: { maxSizeBytes: 10485760, maxFiles: 5 },
+    }),
     getPublicModels: () =>
       routes.map((r) => ({ id: r.publicModel, ownedBy: 'open-fusion' })),
   };
@@ -285,6 +293,66 @@ describe('ChatCompletionsService', () => {
       expect(() => service.prepareStream(dto, apiKey)).toThrow(
         GatewayApiException,
       );
+    });
+  });
+
+  describe('resolved-model stamping for request logs (spec 006)', () => {
+    function orchestrationReporting(
+      resolvedModel: string,
+      delegatedModels?: string[],
+    ): OrchestrationService {
+      return {
+        generate: () =>
+          Promise.resolve({
+            content: 'ok',
+            finishReason: 'stop',
+            usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+            resolvedModel,
+            ...(delegatedModels ? { delegatedModels } : {}),
+          }),
+        stream: async function* (): AsyncIterable<OrchestrationChunk> {
+          await Promise.resolve();
+          yield { delta: 'ok', finishReason: null };
+          yield {
+            delta: '',
+            finishReason: 'stop',
+            resolvedModel,
+            ...(delegatedModels ? { delegatedModels } : {}),
+          };
+        },
+      };
+    }
+
+    it('stamps the resolved and delegated models on the log context (non-streaming)', async () => {
+      const service = new ChatCompletionsService(
+        makeFakeConfigService([allowedRoute]),
+        orchestrationReporting('openai/gpt-4.1', ['openai/gpt-4.1-mini']),
+      );
+      const logContext = { requestId: 'req-1' };
+
+      await service.createCompletion(buildDto(), apiKey, logContext);
+
+      expect(logContext).toMatchObject({
+        resolvedModel: 'openai/gpt-4.1',
+        delegatedModels: ['openai/gpt-4.1-mini'],
+      });
+    });
+
+    it('stamps the resolved model once the stream reaches its terminal chunk', async () => {
+      const service = new ChatCompletionsService(
+        makeFakeConfigService([allowedRoute]),
+        orchestrationReporting('openai/gpt-4.1'),
+      );
+      const logContext = { requestId: 'req-2' };
+      const dto = buildDto({ stream: true });
+
+      const { chunks } = service.prepareStream(dto, apiKey, logContext);
+      // Draining the iterable is what advances it to the terminal chunk.
+      for await (const _chunk of chunks) {
+        void _chunk;
+      }
+
+      expect(logContext).toMatchObject({ resolvedModel: 'openai/gpt-4.1' });
     });
   });
 
