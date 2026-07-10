@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "server": {
+    "port": 3000
+  },
+  "auth": {
+    "apiKeys": [
+      {
+        "id": "local-dev",
+        "tokenEnv": "OPEN_FUSION_DEV_API_KEY",
+        "allowedRoutes": ["default"]
+      }
+    ]
+  },
+  "routes": {
+    "default": {
+      "publicModel": "open-fusion/default"
+    }
+  }
+}

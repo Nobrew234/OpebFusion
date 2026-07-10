@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "server": {},
+  "auth": {
+    "apiKeys": [
+      {
+        "id": "local-dev",
+        "tokenEnv": "OPEN_FUSION_FIXTURE_TOKEN",
+        "allowedRoutes": ["default"]
+      }
+    ]
+  },
+  "routes": {
+    "default": {
+      "publicModel": "open-fusion/default"
+    }
+  }
+}

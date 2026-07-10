@@ -1,0 +1,19 @@
+{
+  "name": "open-fusion",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Open Fusion LLM gateway monorepo",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace apps/gateway",
+    "start": "npm run start --workspace apps/gateway",
+    "start:dev": "npm run start:dev --workspace apps/gateway",
+    "lint": "npm run lint --workspace apps/gateway",
+    "format": "npm run format --workspace apps/gateway",
+    "test": "npm run test --workspace apps/gateway",
+    "test:e2e": "npm run test:e2e --workspace apps/gateway",
+    "test:cov": "npm run test:cov --workspace apps/gateway"
+  }
+}
